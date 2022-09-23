@@ -121,7 +121,6 @@ def demoTargets():
     res = ea.optimize(algorithm, seed=2022, verbose=False, drawing=2, outputMsg=True, drawLog=False, saveFlag=True, dirName='result')
 
 
-target = []
 def demoOriginal():
     class MyProblem(ea.Problem):
         def __init__(self):
@@ -129,27 +128,39 @@ def demoOriginal():
             M = 1
             maxormins = [-1]
             Dim = 3
-            varTypes = [1] * Dim # integers: 0 or 1
+            varTypes = [0] * Dim # integers: 0 or 1
             lb = [0,0,0]
-            ub = [1,1,1]
-            lbin = [1,1,1]
-            ubin = [1,1,1]
+            ub = [1,1,2]
+            lbin = [1,1,0]
+            ubin = [1,1,0]
             ea.Problem.__init__(self, name, M, maxormins, Dim, varTypes, lb,ub, lbin, ubin)
+            
+        
+        # def aimFunc(self, pop):
+        #     Vars = pop.Phen
+        #     x1 = Vars[:, [0]]
+        #     x2 = Vars[:, [1]]
+        #     x3 = Vars[:, [2]]
+        #     pop.ObjV = 4*x1 + 2*x2 + x3
+        #     pop.CV = np.hstack([2*x1 + x2 - 1, x1 + 2*x3 - 2, np.abs(x1 + x2 + x3 - 1)])
+        
         def aimFunc(self, pop):
             Vars = pop.Phen
             x1 = Vars[:, [0]]
             x2 = Vars[:, [1]]
             x3 = Vars[:, [2]]
-            pop.ObjV = 4*x1 + 2*x2 + x3
-            pop.CV = np.hstack([2*x1 + x2 - 1, x1 + 2*x3 - 2, np.abs(x1 + x2 + x3 - 1)])
-            print(Vars.shape)
-            print(x1.shape)
-            print(pop.ObjV.shape)
-            print(pop.CV.shape)
-            t = 2*x1 + x2 - 1
-            print(t.shape)
-            exit(0)
-        
+            f = 4*x1 + 2*x2 + x3 # objective function
+
+            exIdx1 = np.where(2*x1 + x2 > 1)[0] # find the index of instances that violate constraints
+            exIdx2 = np.where(x1 + 2*x3 > 2)[0]
+            exIdx3 = np.where(x1 + x2 + x3 != 1)[0]
+            exIdx = np.unique(np.hstack([exIdx1, exIdx2, exIdx3]))
+            
+            alpha = 2
+            beta = 1
+            f[exIdx] += self.maxormins[0] * alpha * (np.max(f) - np.min(f) + beta)
+            pop.ObjV = f 
+
     problem = MyProblem()
     Encoding ='RI'
     NIND = 50
@@ -162,7 +173,7 @@ def demoOriginal():
     myAlgorithm.recOper.XOVR = 0.7
     myAlgorithm.logTras = 1
     myAlgorithm.verbose = True
-    myAlgorithm.drawing = 2
+    myAlgorithm.drawing = 1
     [BestIndi, population] = myAlgorithm.run()
     BestIndi.save()
     print('评价次数：%s'% myAlgorithm.evalsNum)
