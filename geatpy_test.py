@@ -37,8 +37,6 @@ def singleTarget():
 
     res = ea.optimize(algorithm, seed=2022, verbose=True, drawing=1, outputMsg=True, drawLog=True, saveFlag=True, dirName='result')
 
-
-
 # min(target1*X), max(target2*X)
 # constraint1*X < 1000, constraint2*X > 1000
 def multiTargets():
@@ -80,46 +78,6 @@ def multiTargets():
                                      logTras=0)
     res = ea.optimize(algorithm, seed=2022, verbose=False, drawing=2, outputMsg=True, drawLog=False, saveFlag=True, dirName='result')
 
-# max(4x1+2x2+x3)
-# 2x1+x2<=1, x1+2x3<=2, x1+x2+x3=1
-def demoTargets():
-    class MyProblem(ea.Problem):
-        def __init__(self):
-            name='Demo'
-            M = 1 # target dimension
-            maxormins = [-1] # max
-            Dim = 3 # num of variables
-            varTypes = [0] * Dim
-            lb = [0, 0, 0]
-            ub = [1, 1, 2]
-            lbin = [1, 1, 0]
-            ubin = [1, 1, 0]
-            ea.Problem.__init__(self, name, M, maxormins, Dim, varTypes, lb, ub, lbin, ubin)
-
-        @ea.Problem.single
-        def evalVars(self, Vars):
-            f = np.sum(4 * x1 + 2 * x2 + x3)
-            x1 = Vars[0]
-            x2 = Vars[1]
-            x3 = Vars[2]
-
-            CV = np.array([
-                2 * x1 + x2 - 1, 
-                x1 + 2 * x3 - 2, 
-                np.abs(x1 + x2 + x3 - 1)])
-            return f, CV
-        
-    problem = MyProblem()
-    Encoding = 'RI'
-    NIND = 50 # population scale
-    Field = ea.crtfld(Encoding, problem.varTypes, problem.ranges, problem.boarders)
-    population = ea.Population(Encoding, Field, NIND)
-
-    algorithm = ea.soea_DE_best_1_L_templet(problem, population, MAXGEN=200, logTras=0)
-
-
-    res = ea.optimize(algorithm, seed=2022, verbose=False, drawing=2, outputMsg=True, drawLog=False, saveFlag=True, dirName='result')
-
 
 def demoOriginal():
     class MyProblem(ea.Problem):
@@ -136,30 +94,43 @@ def demoOriginal():
             ea.Problem.__init__(self, name, M, maxormins, Dim, varTypes, lb,ub, lbin, ubin)
             
         
-        # def aimFunc(self, pop):
-        #     Vars = pop.Phen
-        #     x1 = Vars[:, [0]]
-        #     x2 = Vars[:, [1]]
-        #     x3 = Vars[:, [2]]
-        #     pop.ObjV = 4*x1 + 2*x2 + x3
-        #     pop.CV = np.hstack([2*x1 + x2 - 1, x1 + 2*x3 - 2, np.abs(x1 + x2 + x3 - 1)])
-        
         def aimFunc(self, pop):
             Vars = pop.Phen
             x1 = Vars[:, [0]]
             x2 = Vars[:, [1]]
             x3 = Vars[:, [2]]
-            f = 4*x1 + 2*x2 + x3 # objective function
+            if (1):
+                pop.ObjV = 4*x1 + 2*x2 + x3
+                pop.CV = np.hstack([2*x1 + x2 - 1, x1 + 2*x3 - 2, np.abs(x1 + x2 + x3 - 1)])
 
-            exIdx1 = np.where(2*x1 + x2 > 1)[0] # find the index of instances that violate constraints
-            exIdx2 = np.where(x1 + 2*x3 > 2)[0]
-            exIdx3 = np.where(x1 + x2 + x3 != 1)[0]
-            exIdx = np.unique(np.hstack([exIdx1, exIdx2, exIdx3]))
-            
-            alpha = 2
-            beta = 1
-            f[exIdx] += self.maxormins[0] * alpha * (np.max(f) - np.min(f) + beta)
-            pop.ObjV = f 
+                print(pop.ObjV.shape)
+                print(pop.CV.shape)
+                exit()
+            else:
+                f = 4*x1 + 2*x2 + x3 # objective function
+                exIdx1 = np.where(2*x1 + x2 > 1)[0] # find the index of instances that violate constraints
+                exIdx2 = np.where(x1 + 2*x3 > 2)[0]
+                exIdx3 = np.where(x1 + x2 + x3 != 1)[0]
+                exIdx = np.unique(np.hstack([exIdx1, exIdx2, exIdx3]))
+                
+                alpha = 2
+                beta = 1
+                f[exIdx] += self.maxormins[0] * alpha * (np.max(f) - np.min(f) + beta)
+                pop.ObjV = f 
+        # def aimFunc(self, pop):
+        #     Vars = pop.Phen
+        #     x1 = Vars[:, [0]]
+        #     x2 = Vars[:, [1]]
+        #     x3 = Vars[:, [2]]
+        #     f = 4*x1 + 2*x2 + x3
+        #     exIdx1 = np.where(2*x1+x2>1)[0]
+        #     exIdx2 = np.where(x1+2*x3>2)[0]
+        #     exIdx3 = np.where(x1+x2+x3!=1)[0]
+        #     exIdx = np.unique(np.hstack([exIdx1,exIdx2,exIdx3]))
+        #     alpha = 2
+        #     beta = 1
+        #     f[exIdx] += self.maxormins[0]*alpha *(np.max(f)-np.min(f)+beta)
+        #     pop.ObjV = f
 
     problem = MyProblem()
     Encoding ='RI'
@@ -172,20 +143,21 @@ def demoOriginal():
     myAlgorithm.mutOper.F = 0.5
     myAlgorithm.recOper.XOVR = 0.7
     myAlgorithm.logTras = 1
-    myAlgorithm.verbose = True
-    myAlgorithm.drawing = 1
-    [BestIndi, population] = myAlgorithm.run()
-    BestIndi.save()
-    print('评价次数：%s'% myAlgorithm.evalsNum)
-    print('时间已过%s秒'% myAlgorithm.passTime)
-    if BestIndi.sizes != 0:
-        print('最优的目标函数值为：%s'% BestIndi.ObjV[0][0])
-        print('最优的控制变量值为：')
-        for i in range(BestIndi.Phen.shape[1]):
-            print(BestIndi.Phen[0, i])
-    else:
-        print('没找到可行解。')
+    myAlgorithm.trappedValue = 1e-6
+    myAlgorithm.maxTrappedCount = 100
 
+    # [BestIndi, population] = myAlgorithm.run()
+    # BestIndi.save()
+    # print('评价次数：%s'% myAlgorithm.evalsNum)
+    # print('时间已过%s秒'% myAlgorithm.passTime)
+    # if BestIndi.sizes != 0:
+    #     print('最优的目标函数值为：%s'% BestIndi.ObjV[0][0])
+    #     print('最优的控制变量值为：')
+    #     for i in range(BestIndi.Phen.shape[1]):
+    #         print(BestIndi.Phen[0, i])
+    # else:
+    #     print('没找到可行解。')
+    res = ea.optimize(myAlgorithm, seed=2022, verbose=True, drawing=1, outputMsg=True, drawLog=False, saveFlag=False, dirName='result')
 
 
 # singleTarget()
