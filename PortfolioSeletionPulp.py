@@ -1,33 +1,38 @@
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, PULP_CBC_CMD
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PULP_CBC_CMD
 
 save_path = "./demo_result.csv" # csv path
-TIMEOUT = 120 # time out
+TIMEOUT = 10 # time out
 
-NbvCost = False  # True: max nbv; False: min cost
-minTotalNbv = 20000000
-maxTotalNbv = 800000000
+NbvCost = True  # True: max nbv; False: min cost
+minTotalNbv = 40000000
+maxTotalNbv = 100000000
 minTotalCost = 20000000
 maxTotalCost = 100000000
 fleetAgeLowBound = [None, 3, 4]
 fleetAgeUpBound = [3, 6, 10]
 fleetAgeLimit = [0.2, 0.3, 0.3]
+fleetAgeGeq = [True, True, True] # True: >=, False: <=
 OnHireLimit = 1.0
 weightedAgeLowBound = [None, 3, 4]
 weightedAgeUpBound = [4, 6, 15]
-weightedAgeLimit = [0.2, 0.2, 0.3]
+weightedAgeLimit = [0.4, 0.2, 0.3]
+weightedAgeGeq = [True, True, True]
 productType = ['D20', 'D4H', 'R4H']
-productLimit = [0.1, 0.5, 0.0]
+productLimit = [0.1, 0.6, 0.0]
+productGeq = [True, True, True]
 lesseeType = ['MSC', 'ONE', 'HAPAG']
-lesseeLimit = [0.6, 0.3, 0.2]
+lesseeLimit = [0.5, 0.3, 0.2]
+lesseeGeq = [False, False, False]
 contractType = ['LT', 'LE', 'LF']
-contractLimit = [0.3, 0.11, 0.15]
+contractLimit = [0.3, 0.2, 0.15]
+contractGeq = [True, True, True]
+
 print('Data loading...')
 n = 30000
 rawData = pd.read_excel(io='./FCI ANZ (2022-07-08) (NBV as at 30 Jun 2022)_v2.xlsx', sheet_name='Raw (portfolio)', engine='openpyxl')
-rawData = rawData.iloc[:30000, :61]
-data = rawData.sample(n)
+data = rawData.iloc[:n, :61]
 print('Data processing...')
 def SelectFleetAge(age, i):
     if fleetAgeLowBound[i] is None:
@@ -117,10 +122,12 @@ contract = np.stack([data['ContractType1'].to_numpy(),
 # Model
 var = np.array([LpVariable('container_{0}'.format(i), lowBound=0, cat=LpBinary) for i in range(n)])
 prob = LpProblem("MyProblem", LpMaximize if NbvCost else LpMinimize)
+
 if NbvCost:
     prob += lpSum(var * nbv)
 else:
     prob += lpSum(var * cost)
+
 numSelected = lpSum(var)
 if maxTotalNbv is not None:
     prob += lpSum(var * nbv) <= maxTotalNbv
@@ -131,37 +138,82 @@ if maxTotalCost is not None:
 if minTotalCost is not None:
     prob += lpSum(var * cost) >= minTotalCost
 if fleetAgeLimit[0] is not None:
-    prob += lpSum(var * fleetAge[0]) >= fleetAgeLimit[0] * numSelected
+    if fleetAgeGeq[0]:
+        prob += lpSum(var * fleetAge[0]) >= fleetAgeLimit[0] * numSelected
+    else:
+        prob += lpSum(var * fleetAge[0]) <= fleetAgeLimit[0] * numSelected
 if fleetAgeLimit[1] is not None:
-    prob += lpSum(var * fleetAge[1]) >= fleetAgeLimit[1] * numSelected
+    if fleetAgeGeq[1]:
+        prob += lpSum(var * fleetAge[1]) >= fleetAgeLimit[1] * numSelected
+    else:
+        prob += lpSum(var * fleetAge[1]) <= fleetAgeLimit[1] * numSelected
 if fleetAgeLimit[2] is not None:
-    prob += lpSum(var * fleetAge[2]) >= fleetAgeLimit[2] * numSelected
+    if fleetAgeGeq[2]:
+        prob += lpSum(var * fleetAge[2]) >= fleetAgeLimit[2] * numSelected
+    else:
+        prob += lpSum(var * fleetAge[2]) <= fleetAgeLimit[2] * numSelected
 if OnHireLimit is not None:
     prob += lpSum(var * status) >= OnHireLimit * numSelected
 if weightedAgeLimit[0] is not None:
-    prob += lpSum(var * weightedAge[0]) >= weightedAgeLimit[0] * numSelected
+    if weightedAgeGeq[0]:
+        prob += lpSum(var * weightedAge[0]) >= weightedAgeLimit[0] * numSelected
+    else:
+        prob += lpSum(var * weightedAge[0]) <= weightedAgeLimit[0] * numSelected
 if weightedAgeLimit[1] is not None:
-    prob += lpSum(var * weightedAge[1]) >= weightedAgeLimit[1] * numSelected
+    if weightedAgeGeq[1]:
+        prob += lpSum(var * weightedAge[1]) >= weightedAgeLimit[1] * numSelected
+    else:
+        prob += lpSum(var * weightedAge[1]) <= weightedAgeLimit[1] * numSelected
 if weightedAgeLimit[2] is not None:
-    prob += lpSum(var * weightedAge[2]) >= weightedAgeLimit[2] * numSelected
+    if weightedAgeGeq[2]:
+        prob += lpSum(var * weightedAge[2]) >= weightedAgeLimit[2] * numSelected
+    else:
+        prob += lpSum(var * weightedAge[2]) <= weightedAgeLimit[2] * numSelected
 if productLimit[0] is not None:
-    prob += lpSum(var * product[0]) >= productLimit[0] * numSelected
+    if productGeq[0]:
+        prob += lpSum(var * product[0]) >= productLimit[0] * numSelected
+    else:
+        prob += lpSum(var * product[0]) <= productLimit[0] * numSelected
 if productLimit[1] is not None:
-    prob += lpSum(var * product[1]) >= productLimit[1] * numSelected
+    if productGeq[1]:
+        prob += lpSum(var * product[1]) >= productLimit[1] * numSelected
+    else:
+        prob += lpSum(var * product[1]) <= productLimit[1] * numSelected
 if productLimit[2] is not None:
-    prob += lpSum(var * product[2]) >= productLimit[2] * numSelected
+    if productGeq[2]:
+        prob += lpSum(var * product[2]) >= productLimit[2] * numSelected
+    else:
+        prob += lpSum(var * product[2]) <= productLimit[2] * numSelected
 if lesseeLimit[0] is not None:
-    prob += lpSum(var * lessee[0]) <= lesseeLimit[0] * numSelected
+    if lesseeGeq[0]:
+        prob += lpSum(var * lessee[0]) >= lesseeLimit[0] * numSelected
+    else:
+        prob += lpSum(var * lessee[0]) <= lesseeLimit[0] * numSelected
 if lesseeLimit[1] is not None:
-    prob += lpSum(var * lessee[1]) <= lesseeLimit[1] * numSelected
+    if lesseeGeq[1]:
+        prob += lpSum(var * lessee[1]) >= lesseeLimit[1] * numSelected
+    else:
+        prob += lpSum(var * lessee[1]) <= lesseeLimit[1] * numSelected
 if lesseeLimit[2] is not None:
-    prob += lpSum(var * lessee[2]) <= lesseeLimit[2] * numSelected
+    if lesseeGeq[2]:
+        prob += lpSum(var * lessee[2]) >= lesseeLimit[2] * numSelected
+    else:
+        prob += lpSum(var * lessee[2]) <= lesseeLimit[2] * numSelected
 if contractLimit[0] is not None:
-    prob += lpSum(var * contract[0]) >= contractLimit[0] * numSelected
+    if contractGeq[0]:
+        prob += lpSum(var * contract[0]) >= contractLimit[0] * numSelected
+    else:
+        prob += lpSum(var * contract[0]) <= contractLimit[0] * numSelected
 if contractLimit[1] is not None:
-    prob += lpSum(var * contract[1]) >= contractLimit[1] * numSelected
+    if contractGeq[1]:
+        prob += lpSum(var * contract[1]) >= contractLimit[1] * numSelected
+    else:
+        prob += lpSum(var * contract[1]) <= contractLimit[1] * numSelected
 if contractLimit[2] is not None:
-    prob += lpSum(var * contract[2]) >= contractLimit[2] * numSelected
+    if contractGeq[2]:
+        prob += lpSum(var * contract[2]) >= contractLimit[2] * numSelected
+    else:
+        prob += lpSum(var * contract[2]) <= contractLimit[2] * numSelected
 
 print('Model running...')
 print('======================================================================')
@@ -171,10 +223,14 @@ prob.solve(solver)
 
 print('======================================================================')
 print('Running result: ', LpStatus[prob.status])
+print("target value: ", value(prob.objective))
+# optimal -- optimal solution found (not mathmatical optimum)
+# not solved -- no possible solution found (try to increase TIMEOUT)
+# infeasible -- no solution exits
+
 # if solution is found
 if prob.status == 1 or prob.status == 2:
-    tmp = prob.variables()
-    result = np.array([tmp[i].varValue for i in range(n)])
+    result = np.array([var[i].varValue for i in range(n)])
     print(int(sum(result)), '/', n, 'containers are selected.')
     # save
     data.drop(['FleetAge1', 'FleetAge2', 'FleetAge3', 'Status', 'WeightedAge1', 'WeightedAge2', 'WeightedAge3', 'ProductType1', 'ProductType2', 'ProductType3', 'Lessee1', 'Lessee2', 'Lessee3', 'ContractType1', 'ContractType2', 'ContractType3'], axis=1, inplace=True)
@@ -182,27 +238,36 @@ if prob.status == 1 or prob.status == 2:
     data.to_csv(save_path)
     print('Save result to', save_path)
 
-    # analysis
-    print("nbv:", sum(result * nbv))
-    print("cost:", sum(result * cost))
-    print("container age: ")
-    print("\t container age from {0} to {1}:".format(fleetAgeLowBound[0], fleetAgeUpBound[0]), sum(result * fleetAge[0])/sum(result))
-    print("\t container age from {0} to {1}:".format(fleetAgeLowBound[1], fleetAgeUpBound[1]), sum(result * fleetAge[1])/sum(result))
-    print("\t container age from {0} to {1}:".format(fleetAgeLowBound[2], fleetAgeUpBound[2]), sum(result * fleetAge[2])/sum(result))
-    print('billing status:', sum(result * status)/sum(result))
-    print("weighted age: ")
-    print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[0], weightedAgeUpBound[0]), sum(result * weightedAge[0])/sum(result))
-    print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[1], weightedAgeUpBound[1]), sum(result * weightedAge[1])/sum(result))
-    print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[2], weightedAgeUpBound[2]), sum(result * weightedAge[2])/sum(result))
-    print("product: ")
-    print("\t product {0}:".format(productType[0]), sum(result * product[0])/sum(result))
-    print("\t product {0}:".format(productType[1]), sum(result * product[1])/sum(result))
-    print("\t product {0}:".format(productType[2]), sum(result * product[2])/sum(result))
-    print("lessee: ")
-    print("\t lessee {0}:".format(lesseeType[0]), sum(result * lessee[0])/sum(result))
-    print("\t lessee {0}:".format(lesseeType[1]), sum(result * lessee[1])/sum(result))
-    print("\t lessee {0}:".format(lesseeType[2]), sum(result * lessee[2])/sum(result))
-    print("contract type: ")
-    print("\t contract type {0}:".format(contractType[0]), sum(result * contract[0])/sum(result))
-    print("\t contract type {0}:".format(contractType[1]), sum(result * contract[1])/sum(result))
-    print("\t contract type {0}:".format(contractType[2]), sum(result * contract[2])/sum(result))
+    # debug
+    if 1:
+        print('======================================================================')
+        print("nbv:", round(sum(result * nbv), 2), 'constraints:', minTotalNbv, maxTotalNbv)
+        print("cost:", round(sum(result * cost), 2), 'constraints:', minTotalCost, maxTotalCost)
+
+        print("container age: ")
+        print("\t container age from {0} to {1}:".format(fleetAgeLowBound[0], fleetAgeUpBound[0]), round(sum(result * fleetAge[0])/sum(result), 2), 'constraints:', fleetAgeLimit[0])
+        print("\t container age from {0} to {1}:".format(fleetAgeLowBound[1], fleetAgeUpBound[1]), round(sum(result * fleetAge[1])/sum(result), 2), 'constraints:', fleetAgeLimit[1])
+        print("\t container age from {0} to {1}:".format(fleetAgeLowBound[2], fleetAgeUpBound[2]), round(sum(result * fleetAge[2])/sum(result), 2), 'constraints:', fleetAgeLimit[2])
+
+        print('billing status:', sum(result * status)/sum(result), 'constraints:', OnHireLimit)
+
+        print("weighted age: ")
+        print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[0], weightedAgeUpBound[0]), round(sum(result * weightedAge[0])/sum(result), 2), 'constraints:', weightedAgeLimit[0])
+        print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[1], weightedAgeUpBound[1]), round(sum(result * weightedAge[1])/sum(result), 2), 'constraints:', weightedAgeLimit[1])
+        print("\t weighted age from {0} to {1}:".format(weightedAgeLowBound[2], weightedAgeUpBound[2]), round(sum(result * weightedAge[2])/sum(result), 2), 'constraints:', weightedAgeLimit[2])
+        
+        print("product: ")
+        print("\t product {0}:".format(productType[0]), round(sum(result * product[0])/sum(result), 2), 'constraints:', productLimit[0])
+        print("\t product {0}:".format(productType[1]), round(sum(result * product[1])/sum(result), 2), 'constraints:', productLimit[1])
+        print("\t product {0}:".format(productType[2]), round(sum(result * product[2])/sum(result), 2), 'constraints:', productLimit[2])
+        
+        print("lessee: ")
+        print("\t lessee {0}:".format(lesseeType[0]), round(sum(result * lessee[0])/sum(result), 2), 'constraints:', lesseeLimit[0])
+        print("\t lessee {0}:".format(lesseeType[1]), round(sum(result * lessee[1])/sum(result), 2), 'constraints:', lesseeLimit[1])
+        print("\t lessee {0}:".format(lesseeType[2]), round(sum(result * lessee[2])/sum(result), 2), 'constraints:', lesseeLimit[2])
+        
+        print("contract type: ")
+        print("\t contract type {0}:".format(contractType[0]), round(sum(result * contract[0])/sum(result), 2), 'constraints:', contractLimit[0])
+        print("\t contract type {0}:".format(contractType[1]), round(sum(result * contract[1])/sum(result), 2), 'constraints:', contractLimit[1])
+        print("\t contract type {0}:".format(contractType[2]), round(sum(result * contract[2])/sum(result), 2), 'constraints:', contractLimit[2])
+        
