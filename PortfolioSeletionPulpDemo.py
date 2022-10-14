@@ -6,9 +6,9 @@ import heapq
 
 save_path = './demo_result.csv'
 
-TIMEOUT = 200 # timeout 
+TIMEOUT = 300 # timeout 
 
-n = 100000 # number of containers
+n = 200000 # number of containers
 
 NbvCost = True  # True: max nbv; False: min cost
 
