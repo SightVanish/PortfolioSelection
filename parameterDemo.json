@@ -1,0 +1,121 @@
+{
+    "query_id": "",
+    "initial_query": "",
+    "secondary_query": {
+        "prefer": {
+            "NBVOrCost": 1,
+            "maxOrMin": 1
+        },
+        "totalNBVFrom": "",
+        "totalNBVTo": 200000000,
+        "totalCostFrom": 100000000,
+        "totalCostTo": 200000000,
+        "containersAge": {
+            "average": {
+                "symbol": 0,
+                "averageWeighedAge": 3
+            },
+            "list": [
+                {
+                    "containersAgeFrom": 0,
+                    "containersAgeTo": 3,
+                    "symbol": 1,
+                    "%": 70
+                },
+                {
+                    "containersAgeFrom": 3,
+                    "containersAgeTo": 6,
+                    "symbol": 1,
+                    "%": 1
+                }
+            ]
+        },
+        "weightedAge": {
+            "average": {
+                "symbol": 0,
+                "averageWeighedAge": 5
+            },
+            "list": [
+                {
+                    "weightedAgeFrom": 3,
+                    "weightedAgeTo": 6,
+                    "symbol": 1,
+                    "%": 15
+                },
+                {
+                    "weightedAgeFrom": 4,
+                    "weightedAgeTo": 15,
+                    "symbol": 1,
+                    "%": 1
+                }
+            ]
+        },
+        "lessee": [
+            {
+                "lessee": "MSC",
+                "symbol": 0,
+                "%": 60
+            },
+            {
+                "lessee": "ESSC",
+                "symbol": 0,
+                "%": 20
+            }
+        ],
+        "TopLessee":[
+            {
+                "Top1": 1,
+                "symbol": 0,
+                "%": 60
+            },
+            {
+                "Top2": 1,
+                "symbol": 0,
+                "%": 80
+            },
+            {
+                "Top3": 0,
+                "symbol": 0,
+                "%": 0
+            }
+        ],
+        "status": [
+            {
+                "onhire": 0,
+                "%": ""
+            },
+            {
+                "offhire": 1,
+                "%": 15
+            },
+            {
+                "none": 1,
+                "%": 10
+            }
+        ],
+        "product": [
+            {
+                "productType": ["D4H"],
+                "symbol": 1,
+                "%": 50
+            },
+            {
+                "productType": ["D20", "D40"],
+                "symbol": 1,
+                "%": 10
+            }
+        ],
+        "contractType": [
+            {
+                "contractType": ["LT"],
+                "symbol": 1,
+                "%": 60
+            },
+            {
+                "contractType": ["LP", "LM"],
+                "symbol": 1,
+                "%": 10
+            }
+        ]
+    }
+}
