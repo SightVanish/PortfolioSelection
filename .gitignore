@@ -7,3 +7,4 @@ demo_result.csv
 pulp_test.py
 __pycache__/
 database_test.py
+post_test.py

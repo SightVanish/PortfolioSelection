@@ -1,24 +1,46 @@
 import numpy as np
 import pandas as pd
 from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PULP_CBC_CMD
+import pulp as pl
 import time
 import heapq
 import json
 import psycopg2
 import psycopg2.extras
+import requests
+import warnings
+import sys
 
-save_path = './demo_result.csv'
+TIMEOUT = 500 # timeout 
 
-TIMEOUT = 800 # timeout 
 numLimit = 5
-conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp_gy", user = "flgyads", password = "flgyads!0920")
 sql_command1 = "select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age from ads.ads_bo_asset_init" 
 
-n = 200000 # number of containers
+n = 100000 # number of containers
 
+if sys.version_info[0:2] != (3, 6):
+    warnings.warn('Please use Python3.6', UserWarning)
+
+print("==============================================================")
 print('Data loading...')
+# load query id
+url = ''
+try:
+    json_response = requests.get(url).content.decode()
+    print(json_response)
+except:
+    print('http fails')
+
 with open("./parameterDemo.json") as f:
     paramDict = json.load(f)
+
+try:
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp_gy", user = "flgyads", password = "flgyads!0920")
+    data = pd.read_sql(sql_command1, conn)[:n]
+    conn.close()
+except:
+    print("Loading data from GreenPlum failed!")
+
 
 queryID = paramDict['query_id']
 initialQuery = paramDict['initial_query']
@@ -92,16 +114,8 @@ for i in range(len(param['contractType'])):
     contractLimit[i] = param['contractType'][i]['%'] / 100
     contractGeq[i] = param['contractType'][i]['symbol']
 
-
-try:
-    data = pd.read_sql(sql_command1, conn)[:n]
-    conn.close()
-except:
-    print("Load data from GreenPlum failure !")
-
-start_time = time.time()
+print("==============================================================")
 print('Data processing...')
-
 for i in range(5):
     if fleetAgeLimit[i]:
         column_name = 'FleetAge{0}'.format(i)
@@ -109,7 +123,7 @@ for i in range(5):
 
 data['OnHireStatus'] = data['billing'].apply(lambda x: 1 if x=='ON' else 0)
 data['OffHireStatus'] = data['billing'].apply(lambda x: 1 if x=='OF' else 0)
-data['NoneStatus'] = data['billing'].apply(lambda x: 1 if pd.isna(x) else 0)
+data['NoneStatus'] = data['billing'].apply(lambda x: 1 if x==' ' else 0)
 
 for i in range(5):
     if weightedAgeLimit[i]:
@@ -128,7 +142,6 @@ for i in range(5):
     if contractLimit[i]:
         column_name = 'ContractType{0}'.format(i)
         data[column_name] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
-
 
 nbv = data['nbv'].to_numpy()
 cost = data['cost'].to_numpy()
@@ -151,20 +164,25 @@ weightedAgeAvg = data['weighted_age'].to_numpy()
 
 lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
 
-print('Time consumed for data processing:', time.time()-start_time)
-print('Model preparation...')
+nbv = np.nan_to_num(nbv)
+cost = np.nan_to_num(cost)
+fleetAgeAvg = np.nan_to_num(fleetAgeAvg)
+weightedAgeAvg = np.nan_to_num(weightedAgeAvg)
 
+print("==============================================================")
+print('Model preparing...')
 def SortTop(l, n):
     topN = heapq.nlargest(n, l, key=lambda x:x[1])
     return np.sum(np.stack([lesseeOneHot[topN[i][0]] for i in range(n)]), axis=0)
 
 var = np.array([LpVariable('container_{0}'.format(i), lowBound=0, cat=LpBinary) for i in range(nbv.shape[0])])
 prob = LpProblem("MyProblem", LpMaximize if maxOrMin else LpMinimize)
-# warm up
+
 warmProb = LpProblem("WarmProblem", LpMaximize)
 warmProb += lpSum(var * 1)
 warmProb.solve(PULP_CBC_CMD(msg = False, timeLimit=1))
 
+# objective function 
 if NbvCost:
     prob += lpSum(var * nbv)
 else:
@@ -252,34 +270,30 @@ for i in range(numLimit):
         else:
             prob += lpSum(var * contract[i]) <= contractLimit[i] * numSelected
 
-# prob.writeLP('problem.lp')
-
-print('Model running...')
 solver = PULP_CBC_CMD(msg = True, timeLimit=TIMEOUT)
 prob.solve(solver)
 
-print('Model Done.')
+
 print("==============================================================")
 # print(prob)
 print("status:", LpStatus[prob.status])
 print("==============================================================")
 print("target value: ", value(prob.objective))
-print('Total Time Consumed:', time.time()-start_time)
 
-
+# if solution is found
 if 1:
     result = np.array([var[i].varValue for i in range(n)])
     print(int(sum(result)), '/', n, 'containers are selected.')
-    print('======================================================================')
+    print("==============================================================")
     print("nbv: {0} between {1} - {2}".format(round(sum(result * nbv), 2), minTotalNbv, maxTotalNbv))
     print("cost: {0} between {1} - {2}".format(round(sum(result * cost), 2), minTotalCost, maxTotalCost))
     print('billing status:')
     if OnHireLimit:
-        print('\t onhire'.format(sum(result * onHireStatus)/sum(result), OnHireLimit))
+        print('\t onhire {0}, -- {1}'.format(sum(result * onHireStatus)/sum(result), OnHireLimit))
     if OffHireLimit:
-        print('\t onhire'.format(sum(result * offHireStatus)/sum(result), OffHireLimit))
+        print('\t offhire {0}, -- {1}'.format(sum(result * offHireStatus)/sum(result), OffHireLimit))
     if NoneHireLimit:
-        print('\t onhire'.format(sum(result * noneHireStatus)/sum(result), NoneHireLimit))
+        print('\t none {0}, -- {1}'.format(sum(result * noneHireStatus)/sum(result), NoneHireLimit))
 
     print("container age:")
     print('\t container average age is {0}, -- {1}'.format(round(sum(result * fleetAgeAvg)/sum(result), 2), fleetAgeAvgLimit))
@@ -304,7 +318,7 @@ if 1:
             print("\t lessee {0} is {1}, -- {2}:".format(lesseeType[i], round(sum(result * lesseeOneHot[lesseeType[i]])/sum(result), 2), lesseeLimit[i]))    
 
     print('Top lessee:')
-    numLessee = {lesseeName: value(lpSum(var * lesseeOneHot[lesseeName])) for lesseeName in data['Contract Cust Id'].value_counts().index}
+    numLessee = {lesseeName: value(lpSum(var * lesseeOneHot[lesseeName])) for lesseeName in data['customer'].value_counts().index}
     sortedLessee = list(numLessee.items())
     top3Lessee = heapq.nlargest(3, sortedLessee, key=lambda x:x[1])
     if topLesseeLimit[0]:
@@ -320,7 +334,8 @@ if 1:
             print("\t contract type {0} is {1}, -- {2}:".format(contractType[i], round(sum(result * contract[i])/sum(result), 2), contractLimit[i])) 
 
 if prob.status == 1 or prob.status == 2:
+    print("==============================================================")
     print('Writing data...')
     data.insert(loc=0, column="Selected", value=result)
     data = data[['Unit Id Fz', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU']]
-    data.to_csv(save_path)
+    data.to_csv('demo_result.csv')
