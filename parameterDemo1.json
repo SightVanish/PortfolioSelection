@@ -1,0 +1,79 @@
+{
+    "query_id": "query_id_test",
+    "initial_query": "",
+    "secondary_query": {
+        "prefer": {
+            "NBVOrCost": 1,
+            "maxOrMin": 1
+        },
+        "totalNBVFrom": 125000000,
+        "totalNBVTo": 150000000,
+        "totalCostFrom": "",
+        "totalCostTo": "",
+        "containersAge": {
+            "average": {
+                "symbol": 0,
+                "averageWeighedAge": 0
+            },
+            "list": [
+
+            ]
+        },
+        "weightedAge": {
+            "average": {
+                "symbol": 0,
+                "averageWeighedAge": 0
+            },
+            "list": [
+                
+            ]
+        },
+        "lessee": [
+
+        ],
+        "TopLessee":[
+            {
+                "Top1": 1,
+                "symbol": 0,
+                "%": 50
+            },
+            {
+                "Top2": 0,
+                "symbol": 0,
+                "%": 0
+            },
+            {
+                "Top3": 1,
+                "symbol": 0,
+                "%": 70
+            }
+        ],
+        "status": [
+            {
+                "onhire": 1,
+                "%": 90
+            },
+            {
+                "offhire": 0,
+                "%": 0
+            },
+            {
+                "none": 0,
+                "%": 0
+            }
+        ],
+        "product": [
+            {
+                "productType": ["D20", "D40", "D4H"],
+                "symbol": 1,
+                "%": 80
+            }
+        ],
+        "contractType": [
+            {
+                "contractType": ["LC", "LT", "LF", "LP"],
+
+            }
+        ]
+    }
+}

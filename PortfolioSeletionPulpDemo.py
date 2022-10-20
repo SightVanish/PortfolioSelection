@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PULP_CBC_CMD
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PulpSolverError, PULP_CBC_CMD
 import pulp as pl
 import time
 import heapq
@@ -10,19 +10,21 @@ import psycopg2.extras
 import requests
 import warnings
 import sys
+start_time = time.time()
 
-TIMEOUT = 500 # timeout 
+TIMEOUT = 50 # timeout 
 
 numLimit = 5
-sql_command1 = "select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age from ads.ads_bo_asset_init" 
+sqlData = "select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age from fll_t_dw.ads_fir_pkg_data" 
 
-n = 100000 # number of containers
+n = 10000 # number of containers
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
 print("==============================================================")
 print('Data loading...')
+
 # load query id
 url = ''
 try:
@@ -35,12 +37,14 @@ with open("./parameterDemo.json") as f:
     paramDict = json.load(f)
 
 try:
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp_gy", user = "flgyads", password = "flgyads!0920")
-    data = pd.read_sql(sql_command1, conn)[:n]
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    data = pd.read_sql(sqlData, conn)[:n]
     conn.close()
 except:
     print("Loading data from GreenPlum failed!")
 
+print('Time for loading data', time.time() - start_time)
+mid_time = time.time()
 
 queryID = paramDict['query_id']
 initialQuery = paramDict['initial_query']
@@ -164,10 +168,21 @@ weightedAgeAvg = data['weighted_age'].to_numpy()
 
 lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
 
-nbv = np.nan_to_num(nbv)
-cost = np.nan_to_num(cost)
-fleetAgeAvg = np.nan_to_num(fleetAgeAvg)
-weightedAgeAvg = np.nan_to_num(weightedAgeAvg)
+
+
+# nbv = np.nan_to_num(nbv)
+# cost = np.nan_to_num(cost)
+# fleetAgeAvg = np.nan_to_num(fleetAgeAvg)
+# weightedAgeAvg = np.nan_to_num(weightedAgeAvg)
+
+
+
+
+
+
+
+print('Time for processing data', time.time() - mid_time)
+mid_time = time.time()
 
 print("==============================================================")
 print('Model preparing...')
@@ -270,8 +285,16 @@ for i in range(numLimit):
         else:
             prob += lpSum(var * contract[i]) <= contractLimit[i] * numSelected
 
+print('Time for model preparing', time.time() - mid_time)
+print("==============================================================")
+print('Model running...')
 solver = PULP_CBC_CMD(msg = True, timeLimit=TIMEOUT)
-prob.solve(solver)
+try:
+    prob.solve(solver)
+except PulpSolverError:
+    print('Nan value is not allowed in model. Need data cleaning.')
+except Exception as e:
+    print(e) 
 
 
 print("==============================================================")
@@ -333,9 +356,11 @@ if 1:
         if contractLimit[i]  :
             print("\t contract type {0} is {1}, -- {2}:".format(contractType[i], round(sum(result * contract[i])/sum(result), 2), contractLimit[i])) 
 
-if prob.status == 1 or prob.status == 2:
-    print("==============================================================")
-    print('Writing data...')
-    data.insert(loc=0, column="Selected", value=result)
-    data = data[['Unit Id Fz', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU']]
-    data.to_csv('demo_result.csv')
+# if prob.status == 1 or prob.status == 2:
+#     print("==============================================================")
+#     print('Writing data...')
+#     data.insert(loc=0, column="Selected", value=result)
+#     data = data[['Unit Id Fz', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU']]
+#     data.to_csv('demo_result.csv')
+
+print('Total time cost', time.time() - start_time)
