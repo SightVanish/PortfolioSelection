@@ -16,7 +16,7 @@ TIMEOUT = 2000 # timeout
 
 numLimit = 5
 
-n = 10000 # number of containers
+n = 10000000 # number of containers
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
@@ -28,7 +28,7 @@ with open("./parameterDemo1.json") as f:
     paramDict = json.load(f)
 
 rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', sheet_name='数据', engine='pyxlsb')
-data = rawData[['Unit Id Fz', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU']][:n].copy()
+data = rawData[['Unit Id Fz', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU']].copy()
 data.columns = ['unit_id', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age']
 
 print('Time for loading data', time.time() - start_time)
@@ -288,8 +288,8 @@ print("target value: ", value(prob.objective))
 
 # if solution is found
 if 1:
-    result = np.array([var[i].varValue for i in range(n)])
-    print(int(sum(result)), '/', n, 'containers are selected.')
+    result = np.array([var[i].varValue for i in range(len(var))])
+    print(int(sum(result)), '/', len(result), 'containers are selected.')
     print("==============================================================")
     print("nbv: {0} between {1} - {2}".format(round(sum(result * nbv), 2), minTotalNbv, maxTotalNbv))
     print("cost: {0} between {1} - {2}".format(round(sum(result * cost), 2), minTotalCost, maxTotalCost))
@@ -346,7 +346,8 @@ if 1:
         if contractLimit[i]  :
             print("\t contract type {0} is {1}, -- {2}:".format(contractType[i], round(sum(result * contract[i])/sum(result), 2), contractLimit[i])) 
 
-if prob.status == 1 or prob.status == 2:
+# if prob.status == 1 or prob.status == 2:
+if 1:
     print("==============================================================")
     print('Writing data...')
     data.insert(loc=0, column="Selected", value=result)

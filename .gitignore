@@ -8,3 +8,4 @@ pulp_test.py
 __pycache__/
 database_test.py
 post_test.py
+output_test.py
