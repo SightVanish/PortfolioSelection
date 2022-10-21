@@ -15,10 +15,10 @@ start_time = time.time()
 
 TIMEOUT = 500 # timeout 
 
+n = 100000 # number of containers
 numLimit = 5
-sqlData = "select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age from fll_t_dw.ads_fir_pkg_data" 
 
-n = 10000 # number of containers
+sqlData = "select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age from fll_t_dw.ads_fir_pkg_data LIMIT {0}".format(n) 
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
@@ -39,7 +39,7 @@ with open("./parameterDemo.json") as f:
 
 try:
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-    data = pd.read_sql(sqlData, conn)[:n]
+    data = pd.read_sql(sqlData, conn)
     conn.close()
 except:
     print("Loading data from GreenPlum failed!")
@@ -284,9 +284,9 @@ for i in range(min(3, len(lesseeOneHot))):
     if topLesseeLimit[i]:
         print(14, i)
         if topLesseeGeq[i]:
-            prob += lpSum(var * SortTop(list({i: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i+1)) >= topLesseeLimit[i] * numSelected, "Top{0}>".format(i+1)
+            prob += lpSum(var * SortTop(list({j: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i+1)) >= topLesseeLimit[i] * numSelected, "Top{0}>".format(i+1)
         else:
-            prob += lpSum(var * SortTop(list({i: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i+1)) <= topLesseeLimit[i] * numSelected, "Top{0}<".format(i+1)
+            prob += lpSum(var * SortTop(list({j: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i+1)) <= topLesseeLimit[i] * numSelected, "Top{0}<".format(i+1)
             # prob += sum(heapq.nlargest([value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()], i+1)) <= topLesseeLimit[i] * numSelected, "Top{0}<".format(i+1)
 
 # contract type
@@ -318,8 +318,8 @@ print("==============================================================")
 print("target value: ", value(prob.objective))
 
 # if solution is found
-if debug:    
-    result = np.array([var[i].varValue for i in range(len(result))])
+if prob.status == 1 or prob.status == 2:    
+    result = np.array([var[i].varValue for i in range(len(var))])
     print(int(sum(result)), '/', len(result), 'containers are selected.')
     print('======================================================================')
     print("nbv: {0} between {1} - {2}".format(round(sum(result * nbv), 2), minTotalNbv, maxTotalNbv))

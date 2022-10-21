@@ -16,7 +16,7 @@ TIMEOUT = 2000 # timeout
 
 numLimit = 5
 
-n = 10000000 # number of containers
+n = 1000 # number of containers
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)

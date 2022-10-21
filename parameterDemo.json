@@ -1,5 +1,5 @@
 {
-    "query_id": "test_from_remote_machine",
+    "query_id": "test_from_local_machine_2",
     "initial_query": "",
     "secondary_query": {
         "prefer": {
