@@ -1,120 +1,79 @@
 {
-    "query_id": "test_from_local_machine_2",
-    "initial_query": "",
+    "query_id": "16TsNVtmVmBDQQfP2rhR2B",
+    "initial_query": "1 = 1 and (a.financing_code='223.37'or financing_code IS NULL)",
     "secondary_query": {
         "prefer": {
             "NBVOrCost": 1,
             "maxOrMin": 1
         },
-        "totalNBVFrom": "",
-        "totalNBVTo": 200000000,
-        "totalCostFrom": 100000000,
-        "totalCostTo": 200000000,
+        "totalNBVFrom": 125000000,
+        "totalNBVTo": 150000000,
+        "totalCostFrom": "",
+        "totalCostTo": "",
         "containersAge": {
             "average": {
                 "symbol": 0,
-                "averageWeighedAge": 3
+                "averageContainersAge": 0
             },
             "list": [
-                {
-                    "containersAgeFrom": 0,
-                    "containersAgeTo": 3,
-                    "symbol": 1,
-                    "%": 70
-                },
-                {
-                    "containersAgeFrom": 3,
-                    "containersAgeTo": 6,
-                    "symbol": 1,
-                    "%": 1
-                }
+
             ]
         },
         "weightedAge": {
             "average": {
                 "symbol": 0,
-                "averageWeighedAge": 5
+                "averageWeighedAge": 3.75
             },
             "list": [
-                {
-                    "weightedAgeFrom": 3,
-                    "weightedAgeTo": 6,
-                    "symbol": 1,
-                    "%": 15
-                },
-                {
-                    "weightedAgeFrom": 4,
-                    "weightedAgeTo": 15,
-                    "symbol": 1,
-                    "%": 1
-                }
+                
             ]
         },
         "lessee": [
-            {
-                "lessee": "MSC",
-                "symbol": 0,
-                "%": 60
-            },
-            {
-                "lessee": "ESSC",
-                "symbol": 0,
-                "%": 20
-            }
+
         ],
         "TopLessee":[
             {
                 "Top1": 1,
                 "symbol": 0,
-                "%": 60
+                "percent": 50
             },
             {
-                "Top2": 1,
+                "Top2": 0,
                 "symbol": 0,
-                "%": 80
+                "percent": 0
             },
             {
-                "Top3": 0,
+                "Top3": 1,
                 "symbol": 0,
-                "%": 0
+                "percent": 70
             }
         ],
         "status": [
             {
-                "onhire": 0,
-                "%": ""
+                "onhire": 1,
+                "percent": 90
             },
             {
-                "offhire": 1,
-                "%": 15
+                "offhire": 0,
+                "percent": 0
             },
             {
-                "none": 1,
-                "%": 10
+                "none": 0,
+                "percent": 0
             }
         ],
         "product": [
             {
-                "productType": ["D4H"],
+                "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
-                "%": 50
-            },
-            {
-                "productType": ["D20", "D40"],
-                "symbol": 1,
-                "%": 10
+                "percent": 80
             }
         ],
         "contractType": [
             {
-                "contractType": ["LT"],
+                "contractType": ["LC", "LT", "LF", "LP"],
                 "symbol": 1,
-                "%": 60
-            },
-            {
-                "contractType": ["LP", "LM"],
-                "symbol": 1,
-                "%": 10
+                "percent": 100
             }
         ]
     }
