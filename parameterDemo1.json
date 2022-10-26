@@ -13,7 +13,7 @@
         "containersAge": {
             "average": {
                 "symbol": 0,
-                "averageWeighedAge": 0
+                "averageContainersAge": 0
             },
             "list": [
 
@@ -35,45 +35,38 @@
             {
                 "Top1": 1,
                 "symbol": 0,
-                "%": 50
+                "percent": 50
             },
             {
                 "Top2": 0,
                 "symbol": 0,
-                "%": 0
+                "percent": 0
             },
             {
                 "Top3": 1,
                 "symbol": 0,
-                "%": 70
+                "percent": 70
             }
         ],
         "status": [
             {
-                "onhire": 1,
-                "%": 90
-            },
-            {
-                "offhire": 0,
-                "%": 0
-            },
-            {
-                "none": 0,
-                "%": 0
+                "statusType":"ON",
+                "symbol": 1,
+                "percent": 90
             }
         ],
         "product": [
             {
                 "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
-                "%": 80
+                "percent": 80
             }
         ],
         "contractType": [
             {
                 "contractType": ["LC", "LT", "LF", "LP"],
                 "symbol": 1,
-                "%": 100
+                "percent": 100
             }
         ]
     }

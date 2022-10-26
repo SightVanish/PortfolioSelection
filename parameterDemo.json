@@ -40,12 +40,12 @@
             {
                 "Top2": 1,
                 "symbol": 0,
-                "percent": 100
+                "percent": 45
             },
             {
                 "Top3": 1,
                 "symbol": 0,
-                "percent": 100
+                "percent": 60
             }
         ],
         "status": [
