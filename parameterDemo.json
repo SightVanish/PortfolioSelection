@@ -13,7 +13,7 @@
             "averageContainersAge": 0
         },
         "basis": "ceu",
-        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is empty",
+        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is none",
         "list": [
             {
                 "containersAgeFrom": 1.0,
