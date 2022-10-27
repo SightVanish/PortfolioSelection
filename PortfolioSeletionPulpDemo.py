@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PulpSolverError, PULP_CBC_CMD
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PulpSolverError
+from pulp.apis import PULP_CBC_CMD
 import pulp as pl
 import time
 import heapq
@@ -12,11 +13,7 @@ import warnings
 import sys
 import uuid
 import collections
-
-
-start_time = time.time()
-
-TIMEOUT = 500 # timeout 
+total_time = time.time()
 numLimit = 5 # maximum num of constraints in each condition
 
 if sys.version_info[0:2] != (3, 6):
@@ -24,7 +21,7 @@ if sys.version_info[0:2] != (3, 6):
 
 def ReportStatus(msg, flag):
     sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}' where id='{2}'".format(msg, flag, queryID)
-    print("==============================================================")
+    print("============================================================================================================================")
     print("Reporting issue:", msg)
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
@@ -33,13 +30,8 @@ def ReportStatus(msg, flag):
     conn.commit()
     conn.close()
 
-def SortTop(l, n):
-    topN = heapq.nlargest(n, l, key=lambda x:x[1])
-    return np.sum(np.stack([lesseeOneHot[topN[i][0]] for i in range(n)]), axis=0)
-
-print("==============================================================")
-
 try:
+    print("============================================================================================================================")
     print('Parameters reading...')
     sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where success_flag='T'"
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
@@ -48,10 +40,6 @@ try:
 except Exception as e:
     print("Loading Parameters from GreenPlum Failed!\n", e)
     exit(1)
-
-# TODO:
-with open("./parameterDemo.json") as f:
-    paramDict = json.load(f)
 
 try:
     print('Data loading...')
@@ -69,6 +57,8 @@ if data.shape[0] == 0:
     ReportStatus("No Available Data!", 'F')
     exit(1)
 
+
+print("==============================================================")
 try:
     queryID = paramDict['query_id']
     initialQuery = paramDict['initial_query']
@@ -151,71 +141,60 @@ except Exception as e:
 
 print("==============================================================")
 print('Data processing...')
-try:
-    # Billing Status
-    data['OnHireStatus'] = data['billing'].apply(lambda x: 1 if x=='ON' else 0)
-    data['OffHireStatus'] = data['billing'].apply(lambda x: 1 if x=='OF' else 0)
-    data['NoneStatus'] = data['billing'].apply(lambda x: 1 if (x!='ON' and x!='OF') else 0)
+# Billing Status
+data['OnHireStatus'] = data['billing'].apply(lambda x: 1 if x=='ON' else 0)
+data['OffHireStatus'] = data['billing'].apply(lambda x: 1 if x=='OF' else 0)
+data['NoneStatus'] = data['billing'].apply(lambda x: 1 if (x!='ON' and x!='OF') else 0)
 
-    # ONE HOT -- all lessee
-    for lesseeName in data['customer'].value_counts().index:
-        data[lesseeName] = data['customer'].apply(lambda x: 1 if x==lesseeName else 0)
+# ONE HOT -- all lessee
+for lesseeName in data['customer'].value_counts().index:
+    data[lesseeName] = data['customer'].apply(lambda x: 1 if x==lesseeName else 0)
 
-    for i in range(numLimit):
-        # Container Age
-        if fleetAgeLimit[i]:
-            column_name = 'FleetAge{0}'.format(i)
-            data[column_name] = data['fleet_year'].apply(lambda x: 1 if fleetAgeLowBound[i]<=x<fleetAgeUpBound[i] else 0)
-        # Weighted Age
-        if weightedAgeLimit[i]:
-            column_name = 'WeightedAge{0}'.format(i)
-            data[column_name] = data['weighted_age'].apply(lambda x: 1 if weightedAgeLowBound[i]<=x<weightedAgeUpBound[i] else 0)
-        # Product Type
-        if productLimit[i]:
-            column_name = 'ProductType{0}'.format(i)
-            data[column_name] = data['product'].apply(lambda x: 1 if x in productType[i] else 0)
-        # Contract Type
-        if contractLimit[i]:
-            column_name = 'ContractType{0}'.format(i)
-            data[column_name] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
+for i in range(numLimit):
+    # Container Age
+    if fleetAgeLimit[i]:
+        column_name = 'FleetAge{0}'.format(i)
+        data[column_name] = data['fleet_year'].apply(lambda x: 1 if fleetAgeLowBound[i]<=x<fleetAgeUpBound[i] else 0)
+    # Weighted Age
+    if weightedAgeLimit[i]:
+        column_name = 'WeightedAge{0}'.format(i)
+        data[column_name] = data['weighted_age'].apply(lambda x: 1 if weightedAgeLowBound[i]<=x<weightedAgeUpBound[i] else 0)
+    # Product Type
+    if productLimit[i]:
+        column_name = 'ProductType{0}'.format(i)
+        data[column_name] = data['product'].apply(lambda x: 1 if x in productType[i] else 0)
+    # Contract Type
+    if contractLimit[i]:
+        column_name = 'ContractType{0}'.format(i)
+        data[column_name] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
 
-    nbv = data['nbv'].to_numpy()
-    cost = data['cost'].to_numpy()
-    onHireStatus = data['OnHireStatus'].to_numpy()
-    offHireStatus = data['OffHireStatus'].to_numpy()
-    noneHireStatus = data['NoneStatus'].to_numpy()
+nbv = data['nbv'].to_numpy()
+cost = data['cost'].to_numpy()
+onHireStatus = data['OnHireStatus'].to_numpy()
+offHireStatus = data['OffHireStatus'].to_numpy()
+noneHireStatus = data['NoneStatus'].to_numpy()
 
-    fleetAge = []
-    weightedAge = []
-    product = []
-    contract = []
-    for i in range(numLimit):
-        fleetAge.append(data['FleetAge{0}'.format(i)].to_numpy() if fleetAgeLimit[i] else None)
-        weightedAge.append(data['WeightedAge{0}'.format(i)].to_numpy() if weightedAgeLimit[i] else None)
-        product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
-        contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
+fleetAge = []
+weightedAge = []
+product = []
+contract = []
+for i in range(numLimit):
+    fleetAge.append(data['FleetAge{0}'.format(i)].to_numpy() if fleetAgeLimit[i] else None)
+    weightedAge.append(data['WeightedAge{0}'.format(i)].to_numpy() if weightedAgeLimit[i] else None)
+    product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
+    contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
 
-    fleetAgeAvg = data['fleet_year'].to_numpy()
-    weightedAgeAvg = data['weighted_age'].to_numpy()
-    lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
-    # TODO:
-    nbv = np.nan_to_num(nbv)
-    cost = np.nan_to_num(cost)
-    fleetAgeAvg = np.nan_to_num(fleetAgeAvg)
-    weightedAgeAvg = np.nan_to_num(weightedAgeAvg)
-except Exception as e:
-    print(e)
-    ReportStatus('Data Processing Failed!', 'F')
-    exit(1)
+fleetAgeAvg = data['fleet_year'].to_numpy()
+weightedAgeAvg = data['weighted_age'].to_numpy()
+lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
+ceu = data['ceu'].to_numpy()
 
-print("==============================================================")
-print('Model preparing...')
-try:
+def BuildModel(topLesseeCandidate, TopConstraints):
+    start_time = time.time()
+    print("==============================================================")
+    print('Model preparing...')
     var = np.array([LpVariable('container_{0}'.format(i), lowBound=0, cat=LpBinary) for i in range(nbv.shape[0])])
     prob = LpProblem("MyProblem", LpMaximize if maxOrMin else LpMinimize)
-    warmProb = LpProblem("WarmProblem", LpMaximize)
-    warmProb += lpSum(var * 1)
-    warmProb.solve(PULP_CBC_CMD(msg = False, timeLimit=1))
 
     # objective function 
     if NbvCost:
@@ -225,6 +204,7 @@ try:
 
     # constraints
     numSelected = lpSum(var) # num of selected containers
+    ceuSelected = lpSum(var * ceu)
     # nbv
     if maxTotalNbv:
         prob += lpSum(var * nbv) <= maxTotalNbv, "MaxNBV"
@@ -245,19 +225,19 @@ try:
             print('Set Status Limit', i)
             if statusType[i] == 'ON':
                 if statusGeq[i]:
-                    prob += lpSum(var * onHireStatus) >= statusLimit[i] * numSelected, "OnHire{0}>".format(i)
+                    prob += lpSum(var * onHireStatus * ceu) >= statusLimit[i] * ceuSelected, "OnHire{0}>".format(i)
                 else:
-                    prob += lpSum(var * onHireStatus) <= statusLimit[i] * numSelected, "OnHire{0}<".format(i)
+                    prob += lpSum(var * onHireStatus * ceu) <= statusLimit[i] * ceuSelected, "OnHire{0}<".format(i)
             if statusType[i] == 'OF':
                 if statusGeq[i]:
-                    prob += lpSum(var * offHireStatus) >= statusLimit[i] * numSelected, "OffHire{0}>".format(i)
+                    prob += lpSum(var * offHireStatus * ceu) >= statusLimit[i] * ceuSelected, "OffHire{0}>".format(i)
                 else:
-                    prob += lpSum(var * offHireStatus) <= statusLimit[i] * numSelected, "OffHire{0}<".format(i)
+                    prob += lpSum(var * offHireStatus * ceu) <= statusLimit[i] * ceuSelected, "OffHire{0}<".format(i)
             if statusType[i] == 'None':
                 if statusGeq[i]:
-                    prob += lpSum(var * noneHireStatus) >= statusLimit[i] * numSelected, "NoneHire{0}>".format(i)
+                    prob += lpSum(var * noneHireStatus * ceu) >= statusLimit[i] * ceuSelected, "NoneHire{0}>".format(i)
                 else:
-                    prob += lpSum(var * noneHireStatus) <= statusLimit[i] * numSelected, "NoneHire{0}<".format(i)
+                    prob += lpSum(var * noneHireStatus * ceu) <= statusLimit[i] * ceuSelected, "NoneHire{0}<".format(i)
     # container age
     if fleetAgeAvgLimit:
         print('Set Container Average Age Limit')
@@ -276,111 +256,210 @@ try:
     if weightedAgeAvgLimit:
         print('Set Weighted Average Age Limit')
         if weightedAgeAvgGeq:
-            prob += lpSum(var * weightedAgeAvg) >= weightedAgeAvgLimit * numSelected, "WeightedAgeAvg>"
+            prob += lpSum(var * weightedAgeAvg) >= weightedAgeAvgLimit * ceuSelected, "WeightedAgeAvg>"
         else:
-            prob += lpSum(var * weightedAgeAvg) <= weightedAgeAvgLimit * numSelected, "WeightedAgeAvg<"
+            prob += lpSum(var * weightedAgeAvg) <= weightedAgeAvgLimit * ceuSelected, "WeightedAgeAvg<"
     for i in range(numLimit):
         if weightedAgeLimit[i]:
             print('Set Weighted Age Limit', i)
             if weightedAgeGeq[i]:
-                prob += lpSum(var * weightedAge[i]) >= weightedAgeLimit[i] * numSelected, "WeightedAge{0}>".format(i)
+                prob += lpSum(var * weightedAge[i]) >= weightedAgeLimit[i] * ceuSelected, "WeightedAge{0}>".format(i)
             else:
-                prob += lpSum(var * weightedAge[i]) <= weightedAgeLimit[i] * numSelected, "WeightedAge{0}<".format(i)
+                prob += lpSum(var * weightedAge[i]) <= weightedAgeLimit[i] * ceuSelected, "WeightedAge{0}<".format(i)
     # product
     for i in range(numLimit):
         if productLimit[i]:
             print('Set Produdct Limit', i)
             if productGeq[i]:
-                prob += lpSum(var * product[i]) >= productLimit[i] * numSelected, "Product{0}>".format(i)
+                prob += lpSum(var * product[i] * ceu) >= productLimit[i] * ceuSelected, "Product{0}>".format(i)
             else:
-                prob += lpSum(var * product[i]) <= productLimit[i] * numSelected, "Product{0}<".format(i)
+                prob += lpSum(var * product[i] * ceu) <= productLimit[i] * ceuSelected, "Product{0}<".format(i)
     # lessee
     for i in range(numLimit):
         if lesseeLimit[i] and lesseeType[i] in lesseeOneHot:
             print('Set Lessee Limit', i)
             if lesseeGeq[i]:
-                prob += lpSum(var * lesseeOneHot[lesseeType[i]]) >= lesseeLimit[i] * numSelected, "Lessee{0}>".format(i)
+                prob += lpSum(var * lesseeOneHot[lesseeType[i]] * ceu) >= lesseeLimit[i] * ceuSelected, "Lessee{0}>".format(i)
             else:
-                prob += lpSum(var * lesseeOneHot[lesseeType[i]]) <= lesseeLimit[i] * numSelected, "Lessee{0}<".format(i)
-    # find top3, top2, top1
-    for i in range(min(3, len(lesseeOneHot)), 0, -1):
-        if topLesseeLimit[i-1]:
-            print('Set Top{0} Limit'.format(i))
-            if topLesseeGeq[i-1]:
-                prob += lpSum(var * SortTop(list({j: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i)) >= topLesseeLimit[i-1] * numSelected, "Top{0}>".format(i)
-            else:
-                prob += lpSum(var * SortTop(list({j: value(lpSum(var * lesseeOneHot[j])) for j in lesseeOneHot.keys()}.items()), i)) <= topLesseeLimit[i-1] * numSelected, "Top{0}<".format(i)
+                prob += lpSum(var * lesseeOneHot[lesseeType[i]] * ceu) <= lesseeLimit[i] * ceuSelected, "Lessee{0}<".format(i)
+   
+    # TOP1 lessee
+    if topLesseeLimit[0] and len(topLesseeCandidate) >= 1:
+        for i in topLesseeCandidate:
+            if {i} not in TopConstraints:
+                print('Set Top1 Limit', i)
+                prob += lpSum(var * ceu * lesseeOneHot[i]) <= topLesseeLimit[0] * ceuSelected, "Top1:{0}<".format(i)
+                TopConstraints.append({i})
+    # TOP2 lessee
+    if topLesseeLimit[1] and len(topLesseeCandidate) >= 2:
+        for i in topLesseeCandidate:
+            for j in topLesseeCandidate:
+                if {i, j} not in TopConstraints and len({i, j}) == 2:
+                    print('Set Top2 Limit', i, j)
+                    prob += lpSum(var * ceu * np.sum(np.stack([lesseeOneHot[i], lesseeOneHot[j]]), axis=0)) <= topLesseeLimit[1] * ceuSelected, "Top2:{0}&{1}<".format(i,j)
+                    TopConstraints.append({i, j})
+    # TOP3 lessee
+    if topLesseeLimit[2] and len(topLesseeCandidate) >= 3:
+        for i in topLesseeCandidate:
+            for j in topLesseeCandidate:
+                for k in topLesseeCandidate:
+                    if {i, j, k} not in TopConstraints and len({i, j, k}) == 3:
+                        print('Set Top3 Limit', i, j, k)
+                        prob += lpSum(var * ceu * np.sum(np.stack([lesseeOneHot[i], lesseeOneHot[j], lesseeOneHot[k]]), axis=0)) <= topLesseeLimit[2] * ceuSelected, "Top3:{0}&{1}&{2}<".format(i,j,k)
+                        TopConstraints.append({i, j, k})
+
     # contract type
     for i in range(numLimit):
         if contractLimit[i]:
             print('Set Contract Type Limit', i)
             if contractGeq[i]:
-                prob += lpSum(var * contract[i]) >= contractLimit[i] * numSelected, "ContractType{0}>".format(i)
+                prob += lpSum(var * contract[i] * ceu) >= contractLimit[i] * ceuSelected, "ContractType{0}>".format(i)
             else:
-                prob += lpSum(var * contract[i]) <= contractLimit[i] * numSelected, "ContractType{0}<".format(i)
-except Exception as e:
-    print(e)
-    ReportStatus('Model Preparation Failed!', 'F')
-    exit(1)
+                prob += lpSum(var * contract[i] * ceu) <= contractLimit[i] * ceuSelected, "ContractType{0}<".format(i)
 
-print("==============================================================")
-print('Model solving...')
+    return prob, var
 
-# solve model
-solver = PULP_CBC_CMD(msg = True, timeLimit=TIMEOUT)
-try:
-    prob.solve(solver)
-except PulpSolverError:
-    print(e)
-    ReportStatus('Nan value is not allowed in model. Data cleaning is necessary!', 'F')
-    exit(1)
-except Exception as e:
-    ReportStatus(e, 'F')
-    exit(1)
-
-
-print("==============================================================")
-# print(prob)
-print("status:", LpStatus[prob.status])
-print("==============================================================")
-print("target value: ", value(prob.objective))
-
-if prob.status == 1: # optimal
-    result = np.array([var[i].varValue for i in range(len(var))])
-    if len(collections.Counter(result)) > 2:
-        ReportStatus("Model Failed", 'F')
-        exit(1)
-    print(int(sum(result)), '/', len(result), 'containers are selected.')
+def SolveModel(prob, var, timeLimit):
+    start_time = time.time()
     print("==============================================================")
-    print('Output...')
+    print('Model solving...')
+    # solve model
+    solver = PULP_CBC_CMD(msg = True, timeLimit=timeLimit, threads=8)
+    prob.solve(solver)
+    print("==============================================================")
+    print("status:", LpStatus[prob.status])
+    print("==============================================================")
+    print('Time Cost', time.time() - start_time)
 
-    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id) values %s"
-    try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-        conn.autocommit = True
-        cur = conn.cursor()
-        print('Writing data...')
-        values_list = []
-        for i in range(len(result)):
-            if result[i]:
-                values_list.append((data['unit_id_fz'][i], queryID, uuid.uuid1().hex))
-        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
-        conn.commit()
-        conn.close()
-        ReportStatus('Successful', 'O')
-    except Exception as e:
-        print(e) 
-        ReportStatus("Writing Data to GreenPlum Failed!", 'F')
-        exit(1)
+    return prob, var, prob.status
 
-elif prob.status == 0: # not solved
-    ReportStatus("Not Solved. Please Reset Time Limit.", 'N')
-    exit(1)
-elif prob.status == -1: # infeasible
-    ReportStatus("Infeasible. Please Reset Constraints", 'I')
-    exit(1)
-else: 
-    ReportStatus("Model Failed", 'F')
-    exit(1)
+def UpdateModel(prob, var, topLesseeCandidate, TopConstraints):
+    print("==============================================================")
+    print('Model updating...')
+    ceuSelected = lpSum(var * ceu) # num of selected containers
+    # TOP1 lessee
+    if topLesseeLimit[0] and len(topLesseeCandidate) >= 1:
+        for i in topLesseeCandidate:
+            if {i} not in TopConstraints:
+                print('Update Top1 Limit', i)
+                prob += lpSum(var * ceu * lesseeOneHot[i]) <= topLesseeLimit[0] * ceuSelected, "Top1:{0}<".format(i)
+                TopConstraints.append({i})
+    # TOP2 lessee
+    if topLesseeLimit[1] and len(topLesseeCandidate) >= 2:
+        for i in topLesseeCandidate:
+            for j in topLesseeCandidate:
+                if {i, j} not in TopConstraints and len({i, j}) == 2:
+                        print('Update Top2 Limit', i, j)
+                        prob += lpSum(var * ceu * np.sum(np.stack([lesseeOneHot[i], lesseeOneHot[j]]), axis=0)) <= topLesseeLimit[1] * ceuSelected, "Top2:{0}&{1}<".format(i,j)
+                        TopConstraints.append({i, j})
+    # TOP3 lessee
+    if topLesseeLimit[2] and len(topLesseeCandidate) >= 3:
+        for i in topLesseeCandidate:
+            for j in topLesseeCandidate:
+                    for k in topLesseeCandidate:
+                            if {i, j, k} not in TopConstraints and len({i, j, k}) == 3:
+                                print('Update Top3 Limit', i, j, k)
+                                prob += lpSum(var * ceu * np.sum(np.stack([lesseeOneHot[i], lesseeOneHot[j], lesseeOneHot[k]]), axis=0)) <= topLesseeLimit[2] * ceuSelected, "Top3:{0}&{1}&{2}<".format(i,j,k)
+                                TopConstraints.append({i, j, k})
+    return prob, var
 
-print('Total Time Consumed: {0} seconds.'.format(time.time()-start_time))
+
+TopConstraints = []
+
+topLesseeCandidate = set(data['customer'].value_counts().keys()[:3])
+print('Top Lessee Candidates:', topLesseeCandidate)
+prob, var = BuildModel(topLesseeCandidate, TopConstraints)
+
+while True:
+    prob, var, s = SolveModel(prob, var, 200 * len(topLesseeCandidate))
+    if prob.status != 1:
+        print('Algorithm Failed!')
+        break
+    result = np.array([var[i].varValue for i in range(len(var))])
+    top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+    top3 = set(i[0] for i in top3Lessee)
+    if topLesseeCandidate >= top3:
+        print('Algorithm Succeeded!')
+        break
+    else:
+        print("============================================================================================================================")
+        print('Recurse...xD')
+        topLesseeCandidate = topLesseeCandidate.union(top3)
+        print('Top3 lessee:', top3)
+        print('Top Lessee Candidates:', topLesseeCandidate)
+        prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
+
+if 1:    
+    result = np.array([var[i].varValue for i in range(len(var))])
+    print(set(result))
+    # result = np.array([1 if var[i].varValue==1 else 0 for i in range(len(var))])
+    # print(set(result))
+    print(int(sum(result)), '/', len(result), 'containers are selected.')
+    print('======================================================================')
+    print("nbv: {0} between {1} - {2}".format(round(sum(result*nbv), 4), minTotalNbv, maxTotalNbv))
+    print("cost: {0} between {1} - {2}".format(round(sum(result*cost), 4), minTotalCost, maxTotalCost))
+    print('billing status:')
+    for i in range(numLimit):
+        if statusType[i]:
+            if statusType[i] == 'ON':
+                print('\t OnHire is {0}, -- {1}'.format(round(sum(result*onHireStatus*ceu)/sum(result*ceu), 4), statusLimit[i]))
+            if statusType[i] == 'OF':
+                print('\t OffHire is {0}, -- {1}'.format(round(sum(result*offHireStatus*ceu)/sum(result*ceu), 4), statusLimit[i]))
+            if statusType[i] == 'None':
+                print('\t NoneHire is {0}, -- {1}'.format(round(sum(result*noneHireStatus*ceu)/sum(result*ceu), 4), statusLimit[i]))
+
+    print("container age:")
+    if fleetAgeAvgLimit:
+        print('\t container average age is {0}, -- {1}'.format(round(sum(result*fleetAgeAvg)/sum(result), 4), fleetAgeAvgLimit))
+    for i in range(numLimit):
+        if fleetAgeLimit[i]:
+            print("\t container age from {0} to {1} is {2}, -- {3}:".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(sum(result*fleetAge[i])/sum(result), 4), fleetAgeLimit[i]))
+
+    print("weighted age:")
+    if weightedAgeAvgLimit:
+        print('\t weighted average age is {0}, -- {1}'.format(round(sum(result * weightedAgeAvg)/sum(result*ceu), 4), weightedAgeAvgLimit))
+    for i in range(numLimit):
+        if weightedAgeLimit[i]:
+            print("\t weighted age from {0} to {1} is {2}, -- {3}:".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(sum(result * weightedAge[i])/sum(result*ceu), 4), weightedAgeLimit[i]))    
+
+    print("product:")
+    for i in range(numLimit):
+        if productLimit[i]:
+            print("\t product {0} is {1}, -- {2}:".format(productType[i], round(sum(result*product[i]*ceu)/sum(result*ceu), 4), productLimit[i]))    
+    
+    print("lessee:")
+    for i in range(numLimit):
+        if lesseeLimit[i]:
+            print("\t lessee {0} is {1}, -- {2}:".format(lesseeType[i], round(sum(result*lesseeOneHot[lesseeType[i]]*ceu)/sum(result*ceu), 4), lesseeLimit[i]))    
+
+    print('Top lessee:')
+    numLessee = {lesseeName: value(lpSum(var*lesseeOneHot[lesseeName]*ceu)) for lesseeName in data['customer'].value_counts().index}
+    sortedLessee = list(numLessee.items())
+    top3Lessee = heapq.nlargest(3, sortedLessee, key=lambda x:x[1])
+    if topLesseeLimit[0]:
+        print('\t top 1 {0} is {1}, -- {2}'.format(top3Lessee[0][0], top3Lessee[0][1]/sum(result*ceu), topLesseeLimit[0]))
+    if topLesseeLimit[1]:
+        if len(top3Lessee) >= 2:
+            print('\t top 2 {0} {1} is {2}, -- {3}'.format(top3Lessee[0][0], top3Lessee[1][0], (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*ceu), topLesseeLimit[1]))
+        else:
+            print('Only one lessee.')
+    if topLesseeLimit[2]:
+        if len(top3Lessee) >= 3:
+            print('\t top 3 {0} {1} {2} is {3}, -- {4}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*ceu), topLesseeLimit[2]))
+        else:
+            print('Only two lessee.')
+            
+    print("contract type:")
+    for i in range(numLimit):
+        if contractLimit[i]:
+            print("\t contract type {0} is {1}, -- {2}:".format(contractType[i], round(sum(result*contract[i]*ceu)/sum(result*ceu), 4), contractLimit[i])) 
+
+
+print("============================================================================================================================")
+print('Total Time Cost:', time.time() - total_time)
+
+print('Output to ./demo_result.csv')
+outputData = data[['unit_id', 'contract_num', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age', 'ceu']].copy()
+outputData.columns = ['Unit Id Fz', 'Contract Num', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU', 'Ceu Fz']
+outputData.insert(loc=0, column="Selected", value=result)
+outputData.to_csv('./demo_result.csv')
