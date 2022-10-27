@@ -1,54 +1,75 @@
 {
-    "query_id": "16TsNVtmVmBDQQfP2rhR2B",
-    "initial_query": "1 = 1 and (a.financing_code='223.37'or financing_code IS NULL)",
-    "secondary_query": {
-        "prefer": {
-            "NBVOrCost": 1,
-            "maxOrMin": 1
+    "prefer": {
+        "NBVOrCost": 1,
+        "maxOrMin": 1
+    },
+    "totalNBVFrom": 1000,
+    "totalNBVTo": 150000000,
+    "totalCostFrom": "",
+    "totalCostTo": "",
+    "containersAge": {
+        "average": {
+            "symbol": 0,
+            "averageContainersAge": 0
         },
-        "totalNBVFrom": 1000,
-        "totalNBVTo": 150000000,
-        "totalCostFrom": "",
-        "totalCostTo": "",
-        "containersAge": {
-            "average": {
-                "symbol": 0,
-                "averageContainersAge": 0
-            },
-            "list": [
-
-            ]
-        },
-        "weightedAge": {
-            "average": {
-                "symbol": 0,
-                "averageWeighedAge": 3.75
-            },
-            "list": [
-                
-            ]
-        },
-        "lessee": [
-
-        ],
-        "TopLessee":[
+        "basis": "ceu",
+        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is empty",
+        "list": [
             {
-                "Top1": 1,
-                "symbol": 0,
+                "containersAgeFrom": 1.0,
+                "containersAgeTo": 3.2,
+                "symbol": 1,
                 "percent": 30
-            },
-            {
-                "Top2": 1,
-                "symbol": 0,
-                "percent": 45
-            },
-            {
-                "Top3": 1,
-                "symbol": 0,
-                "percent": 60
             }
-        ],
-        "status": [
+        ]
+    },
+    "weightedAge": {
+        "average": {
+            "symbol": 0,
+            "averageWeighedAge": 3.75
+        },
+        "basis": "ceu",
+        "list": [
+            {
+                "weightedAgeFrom": 1,
+                "weightedAgeTo": 4,
+                "symbol": 0,
+                "percent": 20 
+            }
+        ]
+    },
+    "lessee": {
+        "basis": "ceu",
+        "TopLessee": {
+            "list": [
+                {
+                    "Top1": 1,
+                    "symbol": 0,
+                    "percent": 30
+                },
+                {
+                    "Top2": 1,
+                    "symbol": 0,
+                    "percent": 45
+                },
+                {
+                    "Top3": 1,
+                    "symbol": 0,
+                    "percent": 60
+                }
+            ]
+        },
+        "list": [
+            {
+                "lessee": "MSC",
+                "symbol": 0,
+                "percent": 40
+            }
+        ]
+    },
+    "status": {
+        "basis": "ceu",
+        "list": [
             {
                 "statusType":"None",
                 "symbol": 0,
@@ -64,15 +85,21 @@
                 "symbol": 0,
                 "percent": 5
             }
-        ],
-        "product": [
+        ]
+    },
+    "product": {
+        "basis": "ceu",
+        "list": [
             {
                 "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
                 "percent": 80
             }
-        ],
-        "contractType": [
+        ]
+    },
+    "contractType": {
+        "basis": "ceu",
+        "list": [
             {
                 "contractType": ["LC", "LT", "LF", "LP"],
                 "symbol": 1,

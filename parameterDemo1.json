@@ -1,68 +1,78 @@
 {
-    "query_id": "query_id_test",
-    "initial_query": "",
-    "secondary_query": {
-        "prefer": {
-            "NBVOrCost": 1,
-            "maxOrMin": 1
+    "prefer": {
+        "NBVOrCost": 1,
+        "maxOrMin": 1
+    },
+    "totalNBVFrom": 125000000,
+    "totalNBVTo": 150000000,
+    "totalCostFrom": "",
+    "totalCostTo": "",
+    "containersAge": {
+        "average": {
+            "symbol": 0,
+            "averageContainersAge": 0
         },
-        "totalNBVFrom": 125000000,
-        "totalNBVTo": 150000000,
-        "totalCostFrom": "",
-        "totalCostTo": "",
-        "containersAge": {
-            "average": {
-                "symbol": 0,
-                "averageContainersAge": 0
-            },
+        "basis": "ceu",
+        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is empty",
+        "list": [
+        ]
+    },
+    "weightedAge": {
+        "average": {
+            "symbol": 0,
+            "averageWeighedAge": 3.75
+        },
+        "basis": "ceu",
+        "list": [
+        ]
+    },
+    "lessee": {
+        "basis": "ceu",
+        "TopLessee": {
             "list": [
-
+                {
+                    "Top1": 1,
+                    "symbol": 0,
+                    "percent": 50
+                },
+                {
+                    "Top2": 0,
+                    "symbol": 0,
+                    "percent": 0
+                },
+                {
+                    "Top3": 1,
+                    "symbol": 0,
+                    "percent": 70
+                }
             ]
         },
-        "weightedAge": {
-            "average": {
-                "symbol": 0,
-                "averageWeighedAge": 3.75
-            },
-            "list": [
-                
-            ]
-        },
-        "lessee": [
-
-        ],
-        "TopLessee":[
-            {
-                "Top1": 1,
-                "symbol": 0,
-                "percent": 50
-            },
-            {
-                "Top2": 0,
-                "symbol": 0,
-                "percent": 0
-            },
-            {
-                "Top3": 1,
-                "symbol": 0,
-                "percent": 70
-            }
-        ],
-        "status": [
+        "list": [
+        ]
+    },
+    "status": {
+        "basis": "ceu",
+        "list": [
             {
                 "statusType":"ON",
                 "symbol": 1,
                 "percent": 90
             }
-        ],
-        "product": [
+        ]
+    },
+    "product": {
+        "basis": "ceu",
+        "list": [
             {
                 "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
                 "percent": 80
             }
-        ],
-        "contractType": [
+        ]
+    },
+    "contractType": {
+        "basis": "ceu",
+        "list": [
             {
                 "contractType": ["LC", "LT", "LF", "LP"],
                 "symbol": 1,
