@@ -3,8 +3,8 @@
         "NBVOrCost": 1,
         "maxOrMin": 1
     },
-    "totalNBVFrom": 125000000,
-    "totalNBVTo": 150000000,
+    "totalNBVFrom": "",
+    "totalNBVTo": "",
     "totalCostFrom": "",
     "totalCostTo": "",
     "containersAge": {
@@ -12,28 +12,27 @@
             "symbol": 0,
             "averageContainersAge": 0
         },
-        "basis": "ceu",
-        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is empty",
+        "basis": "",
         "list": [
         ]
     },
     "weightedAge": {
         "average": {
             "symbol": 0,
-            "averageWeighedAge": 3.75
+            "averageWeighedAge": 0
         },
-        "basis": "ceu",
+        "basis": "",
         "list": [
         ]
     },
     "lessee": {
-        "basis": "ceu",
+        "basis": "",
         "TopLessee": {
             "list": [
                 {
-                    "Top1": 1,
+                    "Top1": 0,
                     "symbol": 0,
-                    "percent": 50
+                    "percent": 0
                 },
                 {
                     "Top2": 0,
@@ -41,9 +40,9 @@
                     "percent": 0
                 },
                 {
-                    "Top3": 1,
+                    "Top3": 0,
                     "symbol": 0,
-                    "percent": 70
+                    "percent": 0
                 }
             ]
         },
@@ -51,33 +50,18 @@
         ]
     },
     "status": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "statusType":"ON",
-                "symbol": 1,
-                "percent": 90
-            }
         ]
     },
     "product": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "productType": ["D20", "D40", "D4H"],
-                "symbol": 1,
-                "percent": 80
-            }
         ]
     },
     "contractType": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "contractType": ["LC", "LT", "LF", "LP"],
-                "symbol": 1,
-                "percent": 100
-            }
         ]
     }
 }

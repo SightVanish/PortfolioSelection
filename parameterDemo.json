@@ -3,7 +3,7 @@
         "NBVOrCost": 1,
         "maxOrMin": 1
     },
-    "totalNBVFrom": 1000,
+    "totalNBVFrom": 125000000,
     "totalNBVTo": 150000000,
     "totalCostFrom": "",
     "totalCostTo": "",
@@ -13,14 +13,8 @@
             "averageContainersAge": 0
         },
         "basis": "ceu",
-        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is none",
+        "_comment": "basis can only be ceu/teu/nbv/cost. please fill with '' if basis is empty",
         "list": [
-            {
-                "containersAgeFrom": 1.0,
-                "containersAgeTo": 3.2,
-                "symbol": 1,
-                "percent": 30
-            }
         ]
     },
     "weightedAge": {
@@ -30,12 +24,6 @@
         },
         "basis": "ceu",
         "list": [
-            {
-                "weightedAgeFrom": 1,
-                "weightedAgeTo": 4,
-                "symbol": 0,
-                "percent": 20 
-            }
         ]
     },
     "lessee": {
@@ -45,45 +33,30 @@
                 {
                     "Top1": 1,
                     "symbol": 0,
-                    "percent": 30
+                    "percent": 50
                 },
                 {
-                    "Top2": 1,
+                    "Top2": 0,
                     "symbol": 0,
-                    "percent": 45
+                    "percent": 0
                 },
                 {
                     "Top3": 1,
                     "symbol": 0,
-                    "percent": 60
+                    "percent": 70
                 }
             ]
         },
         "list": [
-            {
-                "lessee": "MSC",
-                "symbol": 0,
-                "percent": 40
-            }
         ]
     },
     "status": {
         "basis": "ceu",
         "list": [
             {
-                "statusType":"None",
-                "symbol": 0,
-                "percent": 70
-            },
-            {
                 "statusType":"ON",
                 "symbol": 1,
                 "percent": 90
-            },
-            {
-                "statusType":"OF",
-                "symbol": 0,
-                "percent": 5
             }
         ]
     },

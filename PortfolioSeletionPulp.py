@@ -13,6 +13,7 @@ import uuid
 
 numLimit = 5 # maximum num of constraints in each condition
 timeLimit = 200
+total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
@@ -124,13 +125,17 @@ def OutputPackage(data, result, queryID):
 
 queryID, param, data = ConnectDatabase()
 
-# TEST read local file
+# # TEST read local file
+# print('Data loading...')
 # with open("./parameterDemo1.json") as f:
 #     param = json.load(f)
 # rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', sheet_name='数据', engine='pyxlsb')
 # data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
 # data.columns = ['unit_id', 'contract_num', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age', 'ceu', 'teu']
-# queryID = ""
+# data = data.iloc[:20000].copy()
+# print(param)
+# print(data.shape)
+# queryID = "local_test_id"
 
 print("==============================================================")
 print('Parameters parsing...')
@@ -442,11 +447,13 @@ def UpdateModel(prob, var, topLesseeCandidate, TopConstraints):
 
 
 TopConstraints = []
-basis, _ = DecideBasis(lesseeBasis, 0, ceu, teu, nbv, cost, queryID)
-print('Lessee Basis:', lesseeBasis)
-top3Lessee = heapq.nlargest(3, [(lesseeName, sum(lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
-topLesseeCandidate = set([l[0] for l in top3Lessee])
-print('Top Lessee Candidates:', topLesseeCandidate)
+topLesseeCandidate = {}
+if lesseeBasis:
+    basis, _ = DecideBasis(lesseeBasis, 0, ceu, teu, nbv, cost, queryID)
+    print('Lessee Basis:', lesseeBasis)
+    top3Lessee = heapq.nlargest(3, [(lesseeName, sum(lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+    topLesseeCandidate = set([l[0] for l in top3Lessee])
+    print('Top Lessee Candidates:', topLesseeCandidate)
 prob, var = BuildModel(topLesseeCandidate, TopConstraints)
 prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
 
@@ -467,7 +474,9 @@ def ValidTopConstraints(topLesseeLimit, topLesseeCandidate, top3):
 
 while True:
     try:
-        prob, var = SolveModel(prob, var, timeLimit * len(topLesseeCandidate)) # increase running time
+        runTimeLimit = timeLimit * max(1, len(topLesseeCandidate))
+        print('Time Limit:', runTimeLimit)
+        prob, var = SolveModel(prob, var, runTimeLimit) # increase running time
     except PulpSolverError:
         print()
         ReportStatus('Nan Data IS Not Allowed in Model. Need Data Cleaning!', 'F', queryID)
@@ -477,18 +486,21 @@ while True:
         break
     elif prob.status == 1:
         result = np.array([var[i].varValue for i in range(len(var))]) # get result value
-        basis, _ = DecideBasis(lesseeBasis, var, ceu, teu, nbv, cost, queryID)
-        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
-        valid, topLesseeCandidate = ValidTopConstraints(topLesseeLimit, topLesseeCandidate, [l[0] for l in top3Lessee])
-        print('Top3 lessee:', top3Lessee)
-        print('Top Lessee Candidates:', topLesseeCandidate)
-        if valid:
-            print('Algorithm Succeeded! LOLLLLLLLLLLLLLL')
-            break
+        if lesseeBasis:
+            basis, _ = DecideBasis(lesseeBasis, var, ceu, teu, nbv, cost, queryID)
+            top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+            valid, topLesseeCandidate = ValidTopConstraints(topLesseeLimit, topLesseeCandidate, [l[0] for l in top3Lessee])
+            print('Top3 lessee:', top3Lessee)
+            print('Top Lessee Candidates:', topLesseeCandidate)
+            if valid:
+                print('Algorithm Succeeded! LOLLLLLLLLLLLLLL')
+                break
+            else:
+                print("============================================================================================================================")
+                print('Recurse...xD')
+                prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
         else:
-            print("============================================================================================================================")
-            print('Recurse...xD')
-            prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
+            break
 
 def ValidResult(result):
     passed = True
@@ -496,11 +508,11 @@ def ValidResult(result):
     resultNbv = sum(result*nbv)
     print("nbv: {0}".format(round(resultNbv, 4)))
     if maxTotalNbv:
-        if resultNbv > maxTotalNbv: 
+        if (resultNbv - maxTotalNbv) > 0.1:
             passed = False
             print('\t max failed')
     if minTotalNbv:
-        if resultNbv < minTotalNbv: 
+        if (minTotalNbv - resultNbv) > 0.1: 
             passed = False
             print('\t min failed')
     if passed:
@@ -508,11 +520,11 @@ def ValidResult(result):
     resultCost = sum(result*cost)
     print("cost: {0}".format(round(resultCost, 4)))
     if maxTotalCost:
-        if resultCost > maxTotalCost:
+        if (resultCost - maxTotalCost) > 0.1:
             passed = False
             print('\t max failed')
     if minTotalCost:
-        if resultCost < minTotalCost:
+        if (minTotalCost - resultCost) > 0.1:
             passed = False
             print('\t min failed')
     if passed:
@@ -717,22 +729,25 @@ def ValidResult(result):
 
     if passed:
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
+    return passed
 
 
 
 result = np.array([var[i].varValue for i in range(len(var))])
-print('Result is Valid:', set(result) == 2)
+print('Result is Valid:', len(set(result)) == 2)
 result = np.array([1 if var[i].varValue==1 else 0 for i in range(len(var))])
 print(int(sum(result)), '/', len(result), 'containers are selected.')
 
 if int(sum(result)) == 0:
     ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
 else:
-    passed = ValidResult()
+    passed = ValidResult(result)
     OutputPackage(data, result, queryID)
     if passed:
         ReportStatus('Algorithm Succeeded!', 'O', queryID)
         
     else:
         ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
+print('Final Algorithm Status:', LpStatus[prob.status])
 
+print('Total Time Cost:', time.time() - total_time)
