@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, value, PulpSolverError
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, PulpSolverError
 from pulp.apis import PULP_CBC_CMD
 import time
 import heapq
@@ -10,11 +10,17 @@ import psycopg2.extras
 import warnings
 import sys
 import uuid
+
 numLimit = 5 # maximum num of constraints in each condition
-timeLimit = 150
+timeLimit = 200
+
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
+
 def ReportStatus(msg, flag, queryID):
+    """
+    Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
+    """
     sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}' where id='{2}'".format(msg, flag, queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
@@ -24,7 +30,11 @@ def ReportStatus(msg, flag, queryID):
     cur.execute(sql)
     conn.commit()
     conn.close()
+
 def DecideBasis(basis, var, ceu, teu, nbv, cost, queryID):
+    """
+    Return [ceu / teu / nbv / cost] basde on basis.
+    """
     if basis == 'ceu':
         return ceu, lpSum(var * ceu)
     elif basis == 'teu':
@@ -35,7 +45,11 @@ def DecideBasis(basis, var, ceu, teu, nbv, cost, queryID):
         return ceu, lpSum(var * cost)
     else:
         ReportStatus('Basis is not valid!', 'F', queryID)
+
 def DecideStatus(status, onHireStatus, offHireStatus, noneHireStatus, queryID):
+    """
+    Return [OnHire / OffHire / None] based on status.
+    """
     if status == 'ON':
         return "OnHire", onHireStatus
     elif status == 'OF':
@@ -44,63 +58,79 @@ def DecideStatus(status, onHireStatus, offHireStatus, noneHireStatus, queryID):
         return "NoneHire", noneHireStatus
     else:
         ReportStatus('Status is not valid!', 'F', queryID)
-def ValidTopConstraints(topLesseeLimit, topLesseeCandidate, top3):
-    # valid top3
-    if topLesseeLimit[2]:
-        if not (set(top3[:3]) <= topLesseeCandidate):
-            return False, set.union(topLesseeCandidate, top3[:3])
-    # valid top2
-    if topLesseeLimit[1]:
-        if not (set(top3[:3]) <= topLesseeCandidate):
-            return False, set.union(topLesseeCandidate, top3[:3])
-    # valid top1
-    if topLesseeLimit[0]:
-        if not (set(top3[:1]) <= topLesseeCandidate):
-            return False, set.union(topLesseeCandidate, top3[:1])
-    return True, topLesseeCandidate
 
-# try:
-#     print('Parameters reading...')
-#     sqlParameter = "select python_json, id from fll_t_dw.biz_fir_query_parameter_definition where success_flag='T'"
-#     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-#     paramInput = pd.read_sql(sqlParameter, conn)
-#     if paramInput.shape[0] == 0:
-#         raise Exception('No Valid Query Request is Found!')
-#     elif paramInput.shape[0] > 1:
-#         raise Exception('More than One Valid Query Requests are Found!')
-#     queryID = paramInput['id'][0]
-#     param = json.loads(paramInput['python_json'][0])
-# except Exception as e:
-#     print("Loading Parameters from GreenPlum Failed!\n", e)
-#     exit(1)
+def ConnectDatabase():
+    """
+    Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
+    """
+    try:
+        print('Parameters reading...')
+        sqlParameter = "select python_json, id from fll_t_dw.biz_fir_query_parameter_definition where success_flag='T'"
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        paramInput = pd.read_sql(sqlParameter, conn)
+        if paramInput.shape[0] == 0:
+            raise Exception('No Valid Query Request is Found!')
+        elif paramInput.shape[0] > 1:
+            raise Exception('More than One Valid Query Requests are Found!')
+        queryID = paramInput['id'][0]
+        param = json.loads(paramInput['python_json'][0])
+    except Exception as e:
+        print("Loading Parameters from GreenPlum Failed!\n", e)
+        exit(1)
 
-# try:
-#     print('Data loading...')
-#     print('Query ID:', queryID)
-#     sqlInput = """
-#         select billing_status_fz as billing, unit_id_fz, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
-#         contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
-#         from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
-#     """.format(queryID) 
-#     data = pd.read_sql(sqlInput, conn)
+    try:
+        print('Data loading...')
+        print('Query ID:', queryID)
+        sqlInput = """
+            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
+            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
+            from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
+        """.format(queryID) 
+        data = pd.read_sql(sqlInput, conn)
 
-#     if data.shape[0] == 0:
-#         raise Exception("No Data Available!")
-#     conn.close()
-# except Exception as e:
-#     print(e)
-#     ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
-#     exit(1)
+        if data.shape[0] == 0:
+            raise Exception("No Data Available!")
+        print('Input data shape:', data.shape)
+        print(param)
+        conn.close()
+    except Exception as e:
+        print(e)
+        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
+        exit(1)
 
-# TEST
-queryID = 'testidddddddddddddddddddddddddddd'
-with open("./parameterDemo1.json") as f:
-    param = json.load(f)
-print('Data Loading...')
-rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', sheet_name='数据', engine='pyxlsb')
-data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
-data.columns = ['unit_id', 'contract_num', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age', 'ceu', 'teu']
+    return queryID, param, data
 
+def OutputPackage(data, result, queryID):
+    """
+    Output final package to fll_t_dw.biz_fir_asset_package.
+    """
+    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id) values %s"
+    try:
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        conn.autocommit = True
+        cur = conn.cursor()
+        print('Writing data...')
+        values_list = []
+        for i in range(len(result)):
+            if result[i]:
+                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex))
+        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Writing data to GreenPlum Failed!\n", e) 
+        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
+        exit(1)
+
+queryID, param, data = ConnectDatabase()
+
+# TEST read local file
+# with open("./parameterDemo1.json") as f:
+#     param = json.load(f)
+# rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', sheet_name='数据', engine='pyxlsb')
+# data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
+# data.columns = ['unit_id', 'contract_num', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age', 'ceu', 'teu']
+# queryID = ""
 
 print("==============================================================")
 print('Parameters parsing...')
@@ -248,14 +278,8 @@ def BuildModel(topLesseeCandidate, TopConstraints):
     start_time = time.time()
     print("==============================================================")
     print('Model preparing...')
-    var = np.array([LpVariable('container_{0}'.format(i), lowBound=0, cat=LpBinary) for i in range(nbv.shape[0])])
+    var = np.array([LpVariable('c_{0}'.format(i), lowBound=0, cat=LpBinary) for i in range(nbv.shape[0])])
     prob = LpProblem("MyProblem", LpMaximize if maxOrMin else LpMinimize)
-    
-    numSelected = lpSum(var)
-    ceuSelected = lpSum(var * ceu)
-    teuSelected = lpSum(var * teu)
-    nbvSelected = lpSum(var * nbv)
-    costSelected = lpSum(var * cost)
 
     # objective function 
     if NbvCost:
@@ -282,9 +306,9 @@ def BuildModel(topLesseeCandidate, TopConstraints):
     if fleetAgeAvgLimit:
         print('Set Container Average Age Limit')
         if fleetAgeAvgGeq:
-            prob += lpSum(var * fleetAgeAvg) >= fleetAgeAvgLimit * numSelected, "FleetAgeAvg>"
+            prob += lpSum(var * fleetAgeAvg) >= fleetAgeAvgLimit * lpSum(var), "FleetAgeAvg>"
         else:
-            prob += lpSum(var * fleetAgeAvg) <= fleetAgeAvgLimit * numSelected, "FleetAgeAvg<"
+            prob += lpSum(var * fleetAgeAvg) <= fleetAgeAvgLimit * lpSum(var), "FleetAgeAvg<"
     if fleetAgeBasis:
         basis, basisSelected = DecideBasis(fleetAgeBasis, var, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
@@ -298,9 +322,9 @@ def BuildModel(topLesseeCandidate, TopConstraints):
     if weightedAgeAvgLimit:
         print('Set Weighted Average Age Limit')
         if weightedAgeAvgGeq:
-            prob += lpSum(var * weightedAgeAvg) >= weightedAgeAvgLimit * ceuSelected, "WeightedAgeAvg>"
+            prob += lpSum(var * weightedAgeAvg) >= weightedAgeAvgLimit * lpSum(var * ceu), "WeightedAgeAvg>"
         else:
-            prob += lpSum(var * weightedAgeAvg) <= weightedAgeAvgLimit * ceuSelected, "WeightedAgeAvg<"
+            prob += lpSum(var * weightedAgeAvg) <= weightedAgeAvgLimit * lpSum(var * ceu), "WeightedAgeAvg<"
     if weightedAgeBasis:
         basis, basisSelected = DecideBasis(weightedAgeBasis, var, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
@@ -362,7 +386,7 @@ def SolveModel(prob, var, timeLimit):
     print("==============================================================")
     print('Model solving...')
     # solve model
-    solver = PULP_CBC_CMD(msg=False, timeLimit=timeLimit, threads=8)
+    solver = PULP_CBC_CMD(msg = True, timeLimit=timeLimit, threads=8)
     prob.solve(solver)
     print("==============================================================")
     print("status:", LpStatus[prob.status])
@@ -416,11 +440,30 @@ def UpdateModel(prob, var, topLesseeCandidate, TopConstraints):
                                         topLesseeLimit[2] * basisSelected, "Top3:{0}&{1}&{2}<".format(i,j,k)
     return prob, var
 
+
 TopConstraints = []
-topLesseeCandidate = set(data['customer'].value_counts().keys()[:3])
+basis, _ = DecideBasis(lesseeBasis, 0, ceu, teu, nbv, cost, queryID)
+print('Lessee Basis:', lesseeBasis)
+top3Lessee = heapq.nlargest(3, [(lesseeName, sum(lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+topLesseeCandidate = set([l[0] for l in top3Lessee])
 print('Top Lessee Candidates:', topLesseeCandidate)
 prob, var = BuildModel(topLesseeCandidate, TopConstraints)
 prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
+
+def ValidTopConstraints(topLesseeLimit, topLesseeCandidate, top3):
+    # valid top3
+    if topLesseeLimit[2]:
+        if not (set(top3[:3]) <= topLesseeCandidate):
+            return False, set.union(topLesseeCandidate, top3[:3])
+    # valid top2
+    if topLesseeLimit[1]:
+        if not (set(top3[:3]) <= topLesseeCandidate):
+            return False, set.union(topLesseeCandidate, top3[:3])
+    # valid top1
+    if topLesseeLimit[0]:
+        if not (set(top3[:1]) <= topLesseeCandidate):
+            return False, set.union(topLesseeCandidate, top3[:1])
+    return True, topLesseeCandidate
 
 while True:
     try:
@@ -429,13 +472,13 @@ while True:
         print()
         ReportStatus('Nan Data IS Not Allowed in Model. Need Data Cleaning!', 'F', queryID)
         exit(1)
-    # TODO: output part
     if prob.status != 1:
         print('Algorithm Failed!')
         break
     elif prob.status == 1:
         result = np.array([var[i].varValue for i in range(len(var))]) # get result value
-        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+        basis, _ = DecideBasis(lesseeBasis, var, ceu, teu, nbv, cost, queryID)
+        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName] * basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         valid, topLesseeCandidate = ValidTopConstraints(topLesseeLimit, topLesseeCandidate, [l[0] for l in top3Lessee])
         print('Top3 lessee:', top3Lessee)
         print('Top Lessee Candidates:', topLesseeCandidate)
@@ -447,99 +490,249 @@ while True:
             print('Recurse...xD')
             prob, var = UpdateModel(prob, var, topLesseeCandidate, TopConstraints)
 
-
-print("============================================================================================================================")
-if 1:    
-    result = np.array([var[i].varValue for i in range(len(var))])
-    print('Result is Valid:', set(result) == 2)
-    result = np.array([1 if var[i].varValue==1 else 0 for i in range(len(var))])
-    print(int(sum(result)), '/', len(result), 'containers are selected.')
+def ValidResult(result):
+    passed = True
     print('======================================================================')
-    print("nbv: {0} between {1} - {2}".format(round(sum(result*nbv), 4), minTotalNbv, maxTotalNbv))
-    print("cost: {0} between {1} - {2}".format(round(sum(result*cost), 4), minTotalCost, maxTotalCost))
-    
-    print('billing status:', statusBasis)
-    if statusBasis:
-        basis, _ = DecideBasis(statusBasis, var, ceu, teu, nbv, cost, queryID)
-        for i in range(numLimit):
-            if statusType[i]:
-                if statusType[i] == 'ON':
-                    print('\t OnHire on is {0}, -- {1}'.format(round(sum(result*onHireStatus*basis)/sum(result*basis), 4), statusLimit[i]))
-                if statusType[i] == 'OF':
-                    print('\t OffHire is {0}, -- {1}'.format(round(sum(result*offHireStatus*basis)/sum(result*basis), 4), statusLimit[i]))
-                if statusType[i] == 'None':
-                    print('\t NoneHire is {0}, -- {1}'.format(round(sum(result*noneHireStatus*basis)/sum(result*basis), 4), statusLimit[i]))
+    resultNbv = sum(result*nbv)
+    print("nbv: {0}".format(round(resultNbv, 4)))
+    if maxTotalNbv:
+        if resultNbv > maxTotalNbv: 
+            passed = False
+            print('\t max failed')
+    if minTotalNbv:
+        if resultNbv < minTotalNbv: 
+            passed = False
+            print('\t min failed')
+    if passed:
+        print('\t passed')
+    resultCost = sum(result*cost)
+    print("cost: {0}".format(round(resultCost, 4)))
+    if maxTotalCost:
+        if resultCost > maxTotalCost:
+            passed = False
+            print('\t max failed')
+    if minTotalCost:
+        if resultCost < minTotalCost:
+            passed = False
+            print('\t min failed')
+    if passed:
+        print('\t passed')
 
     print("container age:", fleetAgeBasis)
     if fleetAgeAvgLimit:
-        print('\t container average age is {0}, -- {1}'.format(round(sum(result*fleetAgeAvg)/sum(result), 4), fleetAgeAvgLimit))
+        resultFleetAgeAvg = sum(result*fleetAgeAvg)/sum(result)
+        print('\t container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
+        if fleetAgeAvgGeq:
+            if resultFleetAgeAvg < fleetAgeAvgLimit:
+                passed = False
+                print('\t \t >= failed')
+        else:
+            if resultFleetAgeAvg > fleetAgeAvgLimit:
+                passed = False
+                print('\t \t <= failed')
+        if passed:
+            print('\t \t passed')
     if fleetAgeBasis:
-        basis, _ = DecideBasis(fleetAgeBasis, var, ceu, teu, nbv, cost, queryID)
+        basis, _ = DecideBasis(fleetAgeBasis, 0, ceu, teu, nbv, cost, queryID)
+        resultFleetAge = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if fleetAgeLimit[i]:
-                print("\t container age from {0} to {1} is {2}, -- {3}:".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(sum(result*fleetAge[i]*basis)/sum(result*basis), 4), fleetAgeLimit[i]))
+                resultFleetAge[i] = sum(result*fleetAge[i]*basis)/sum(result*basis)
+                print("\t container age from {0} to {1}: {2}".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(resultFleetAge[i], 4)))
+                if fleetAgeGeq[i]:
+                    if resultFleetAge[i] < fleetAgeLimit[i]:
+                        passed = False
+                        print('\t \t >= failed')
+                else:
+                    if resultFleetAge[i] > fleetAgeLimit[i]:
+                        passed = False
+                        print('\t \t <= failed')
+                if passed:
+                    print('\t \t passed')
 
     print("weighted age:", weightedAgeBasis)
     if weightedAgeAvgLimit:
-        print('\t weighted average age is {0}, -- {1}'.format(round(sum(result*weightedAgeAvg)/sum(result*ceu), 4), weightedAgeAvgLimit))
+        resultWeightedAgeAvg = sum(result*weightedAgeAvg)/sum(result*ceu)
+        print('\t weighted average age is {0}'.format(round(resultWeightedAgeAvg, 4)))
+        if weightedAgeAvgGeq:
+            if resultWeightedAgeAvg < weightedAgeAvgLimit:
+                print('\t \t >= failed')
+                passed = False
+        else:
+            if resultWeightedAgeAvg > weightedAgeAvgLimit:
+                print('\t \t <= failed')
+                passed = False
+        if passed:
+            print('\t \t passed')
     if weightedAgeBasis:
-        basis, _ = DecideBasis(weightedAgeBasis, var, ceu, teu, nbv, cost, queryID)
+        basis, _ = DecideBasis(weightedAgeBasis, 0, ceu, teu, nbv, cost, queryID)
+        resultWeightedAge = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if weightedAgeLimit[i]:
-                print("\t weighted age from {0} to {1} is {2}, -- {3}:".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(sum(result*weightedAge[i]*basis)/sum(result*basis), 4), weightedAgeLimit[i]))    
+                resultWeightedAge[i] = sum(result*weightedAge[i]*basis)/sum(result*basis)
+                print("\t weighted age from {0} to {1} is {2}".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(resultWeightedAge[i], 4)))
+                if weightedAgeGeq[i]:
+                    if resultWeightedAge[i] < weightedAgeLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultWeightedAge[i] > weightedAgeLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
+    if lesseeBasis:
+        basis, _ = DecideBasis(lesseeBasis, 0, ceu, teu, nbv, cost, queryID)
+        print('Certain Lessee:', basis)
+        resultLessee = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if lesseeLimit[i]:
+                resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis)/sum(result*basis)
+                print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
+                if lesseeGeq[i]:
+                    if resultLessee[i] < lesseeLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultLessee[i] > lesseeLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
+        print('Top lessee:')
+        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+        resultTop3Lessee = [
+            top3Lessee[0][1]/sum(result*basis),
+            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis),
+            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis)
+        ]
+        if topLesseeLimit[0]:
+            print('\t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
+            if topLesseeGeq[0]:
+                if resultTop3Lessee[0] < topLesseeLimit[0]:
+                    print('\t \t >= failed')
+                    passed = False
+            else:
+                if resultTop3Lessee[0] > topLesseeLimit[0]:
+                    print('\t \t <= failed')
+                    passed = False
+            if passed:
+                print('\t \t passed')
+        if topLesseeLimit[1]:
+            if len(top3Lessee) >= 2:
+                print('\t top 2 {0} {1} is {2}'.format(top3Lessee[0][0], top3Lessee[1][0], round(resultTop3Lessee[1], 4)))
+                if topLesseeGeq[1]:
+                    if resultTop3Lessee[1] < topLesseeLimit[1]:
+                        print('\t \t >= failed')
+                        passed = False
+                    else:
+                        if resultTop3Lessee[1] > topLesseeLimit[1]:
+                            print('\t \t <= failed')
+                            passed = False
+                if passed:
+                    print('\t \t passed')
+            else:
+                print('\t Only one lessee.')
+        if topLesseeLimit[2]:
+            if len(top3Lessee) >= 3:
+                print('\t top 3 {0} {1} {2} is {3}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], round(resultTop3Lessee[2], 4)))
+                if topLesseeGeq[2]:
+                    if resultTop3Lessee[2] < topLesseeLimit[2]:
+                        print('\t \t >= failed')
+                        passed = False
+                    else:
+                        if resultTop3Lessee[2] > topLesseeLimit[2]:
+                            print('\t \t <= failed')
+                            passed = False
+                if passed:
+                    print('\t \t passed')
+            else:
+                print('\t Only two lessee.')
+        
+    print('billing status:', statusBasis)
+    if statusBasis:
+        basis, _ = DecideBasis(statusBasis, 0, ceu, teu, nbv, cost, queryID)
+        resultStatus = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if statusType[i]:
+                if statusType[i] == 'ON':
+                    resultStatus[i] = sum(result*onHireStatus*basis)/sum(result*basis)
+                    print('\t OnHire is {0}'.format(round(resultStatus[i], 4)))
+                if statusType[i] == 'OF':
+                    resultStatus[i] = sum(result*offHireStatus*basis)/sum(result*basis)
+                    print('\t OffHire is {0}'.format(round(resultStatus[i], 4)))
+                if statusType[i] == 'None':
+                    resultStatus[i] = sum(result*noneHireStatus*basis)/sum(result*basis)
+                    print('\t NoneHire is {0}'.format(round(resultStatus[i], 4)))
+                
+                if statusGeq[i]:
+                    if resultStatus[i] < statusLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultStatus[i] > statusLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
 
     print("product:", productBasis)
     if productBasis:
-        basis, _ = DecideBasis(productBasis, var, ceu, teu, nbv, cost, queryID)
+        basis, _ = DecideBasis(productBasis, 0, ceu, teu, nbv, cost, queryID)
+        resultProduct = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if productLimit[i]:
-                print("\t product {0} is {1}, -- {2}:".format(productType[i], round(sum(result*product[i]*basis)/sum(result*basis), 4), productLimit[i]))    
-    
-    print("lessee:", lesseeBasis)
-    if lesseeBasis:
-        basis, _ = DecideBasis(lesseeBasis, var, ceu, teu, nbv, cost, queryID)
-        print('\t Certain Lessee:')
-        for i in range(numLimit):
-            if lesseeLimit[i]:
-                print("\t lessee {0} is {1}, -- {2}:".format(lesseeType[i], round(sum(result*lesseeOneHot[lesseeType[i]]*basis)/sum(result*basis), 4), lesseeLimit[i]))    
-        print('\t Top lessee:')
-        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result * lesseeOneHot[lesseeName])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+                resultProduct[i] = sum(result*product[i]*basis)/sum(result*basis)
+                print("\t product {0} is {1}:".format(productType[i], round(resultProduct[i], 4)))
+                if productGeq[i]:
+                    if resultProduct[i] < productLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultProduct[i] > productLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
 
-        if topLesseeLimit[0]:
-            print('\t top 1 {0} is {1}, -- {2}'.format(top3Lessee[0][0], top3Lessee[0][1]/sum(result*basis), topLesseeLimit[0]))
-        if topLesseeLimit[1]:
-            if len(top3Lessee) >= 2:
-                print('\t top 2 {0} {1} is {2}, -- {3}'.format(top3Lessee[0][0], top3Lessee[1][0], (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis), topLesseeLimit[1]))
-            else:
-                print('Only one lessee.')
-        if topLesseeLimit[2]:
-            if len(top3Lessee) >= 3:
-                print('\t top 3 {0} {1} {2} is {3}, -- {4}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis), topLesseeLimit[2]))
-            else:
-                print('Only two lessee.')
-            
+
     print("contract type:", contractBasis)
     if contractBasis:
-        basis, _ = DecideBasis(contractBasis, var, ceu, teu, nbv, cost, queryID)
+        basis, _ = DecideBasis(contractBasis, 0, ceu, teu, nbv, cost, queryID)
+        resultContract = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if contractLimit[i]:
-                print("\t contract type {0} is {1}, -- {2}:".format(contractType[i], round(sum(result*contract[i]*basis)/sum(result*basis), 4), contractLimit[i])) 
+                resultContract[i] = sum(result*contract[i]*basis)/sum(result*basis)
+                print("\t contract type {0} is {1}:".format(contractType[i], round(resultContract[i], 4))) 
+                if contractGeq[i]:
+                    if resultContract[i] < contractLimit[i]:
+                        print('\t \t >= failed')
+                else:
+                    if resultContract[i] > contractLimit[i]:
+                        print('\t \t <= failed')
+                if passed:
+                    print('\t \t passed')
+
+    if passed:
+        print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
 
 
 
+result = np.array([var[i].varValue for i in range(len(var))])
+print('Result is Valid:', set(result) == 2)
+result = np.array([1 if var[i].varValue==1 else 0 for i in range(len(var))])
+print(int(sum(result)), '/', len(result), 'containers are selected.')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if int(sum(result)) == 0:
+    ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
+else:
+    passed = ValidResult()
+    OutputPackage(data, result, queryID)
+    if passed:
+        ReportStatus('Algorithm Succeeded!', 'O', queryID)
+        
+    else:
+        ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
 
