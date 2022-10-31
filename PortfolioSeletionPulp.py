@@ -129,9 +129,14 @@ queryID, param, data = ConnectDatabase()
 # print('Data loading...')
 # with open("./parameterDemo1.json") as f:
 #     param = json.load(f)
-# rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', sheet_name='数据', engine='pyxlsb')
-# data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', 'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', 'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
-# data.columns = ['unit_id', 'contract_num', 'cost', 'product', 'customer', 'contract', 'nbv', 'billing', 'fleet_year', 'weighted_age', 'ceu', 'teu']
+# rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', \
+#     sheet_name='数据', engine='pyxlsb')
+# data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', \
+#     'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', \
+#     'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
+# data.columns = ['unit_id', 'contract_num', 'cost', 'product', \
+#     'customer', 'contract', 'nbv', 'billing', \
+#     'fleet_year', 'weighted_age', 'ceu', 'teu']
 # data = data.iloc[:20000].copy()
 # print(param)
 # print(data.shape)
@@ -345,14 +350,17 @@ def BuildModel(topLesseeCandidate, TopConstraints):
     if lesseeBasis:
         basis, basisSelected = DecideBasis(lesseeBasis, var, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
-            if lesseeLimit[i] and lesseeType[i] in lesseeOneHot:
-                print('Set Lessee Limit', i)
-                if lesseeGeq[i]:
-                    prob += lpSum(var * lesseeOneHot[lesseeType[i]] * basis) >= \
-                                lesseeLimit[i] * basisSelected, "Lessee{0}>".format(i)
+            if lesseeLimit[i]:
+                if lesseeType[i] in lesseeOneHot:
+                    print('Set Lessee Limit', i)
+                    if lesseeGeq[i]:
+                        prob += lpSum(var * lesseeOneHot[lesseeType[i]] * basis) >= \
+                                    lesseeLimit[i] * basisSelected, "Lessee{0}>".format(i)
+                    else:
+                        prob += lpSum(var * lesseeOneHot[lesseeType[i]] * basis) <= \
+                                    lesseeLimit[i] * basisSelected, "Lessee{0}<".format(i)
                 else:
-                    prob += lpSum(var * lesseeOneHot[lesseeType[i]] * basis) <= \
-                                lesseeLimit[i] * basisSelected, "Lessee{0}<".format(i)
+                    print('Cannot Find', lesseeType[i])
     # status
     if statusBasis:
         basis, basisSelected = DecideBasis(statusBasis, var, ceu, teu, nbv, cost, queryID)
@@ -515,7 +523,7 @@ def ValidResult(result):
         if (minTotalNbv - resultNbv) > 0.1: 
             passed = False
             print('\t min failed')
-    if passed:
+    if (maxTotalNbv or minTotalNbv) and passed:
         print('\t passed')
     resultCost = sum(result*cost)
     print("cost: {0}".format(round(resultCost, 4)))
@@ -527,7 +535,7 @@ def ValidResult(result):
         if (minTotalCost - resultCost) > 0.1:
             passed = False
             print('\t min failed')
-    if passed:
+    if (maxTotalCost or minTotalCost) and passed:
         print('\t passed')
 
     print("container age:", fleetAgeBasis)
@@ -600,18 +608,21 @@ def ValidResult(result):
         resultLessee = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if lesseeLimit[i]:
-                resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis)/sum(result*basis)
-                print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
-                if lesseeGeq[i]:
-                    if resultLessee[i] < lesseeLimit[i]:
-                        print('\t \t >= failed')
-                        passed = False
-                else:
-                    if resultLessee[i] > lesseeLimit[i]:
-                        print('\t \t <= failed')
-                        passed = False
-                if passed:
-                    print('\t \t passed')
+                if lesseeType[i] in lesseeOneHot:
+                    resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis)/sum(result*basis)
+                    print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
+                    if lesseeGeq[i]:
+                        if resultLessee[i] < lesseeLimit[i]:
+                            print('\t \t >= failed')
+                            passed = False
+                    else:
+                        if resultLessee[i] > lesseeLimit[i]:
+                            print('\t \t <= failed')
+                            passed = False
+                    if passed:
+                        print('\t \t passed')
+            else:
+                print('Can not find {0}'.format(lesseeType[i]))
 
         print('Top lessee:')
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
