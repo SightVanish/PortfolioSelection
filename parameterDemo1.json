@@ -1,41 +1,28 @@
 {
     "prefer": {
-        "NBVOrCost": 0,
-        "maxOrMin": 0
+        "NBVOrCost": 1,
+        "maxOrMin": 1
     },
-    "totalNBVFrom": 10000000,
-    "totalNBVTo": 30000000,
-    "totalCostFrom": 10000000,
+    "totalNBVFrom": 125000000,
+    "totalNBVTo": 150000000,
+    "totalCostFrom": "",
     "totalCostTo": "",
     "containersAge": {
         "average": {
             "symbol": 0,
-            "averageContainersAge": 7
+            "averageContainersAge": 0
         },
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "containersAgeFrom": 0,
-                "containersAgeTo": 3,
-                "symbol": 0,
-                "percent": 90
-            }
-
         ]
     },
     "weightedAge": {
         "average": {
             "symbol": 0,
-            "averageWeighedAge": 5.5
+            "averageWeighedAge": 3.75
         },
-        "basis": "nbv",
+        "basis": "",
         "list": [
-            {
-                "weightedAgeFrom": 7,
-                "weightedAgeTo": 8,
-                "symbol": 1,
-                "percent": 80
-            }
         ]
     },
     "lessee": {
@@ -44,8 +31,8 @@
             "list": [
                 {
                     "Top1": 1,
-                    "symbol": 1,
-                    "percent": 50
+                    "symbol": 0,
+                    "percent": 40
                 },
                 {
                     "Top2": 0,
@@ -55,45 +42,30 @@
                 {
                     "Top3": 1,
                     "symbol": 0,
-                    "percent": 70
+                    "percent": 30
                 }
             ]
         },
         "list": [
-            {
-                "lessee": "MSC",
-                "symbol": 0,
-                "percent": 70
-            }
         ]
     },
     "status": {
-        "basis": "teu",
+        "basis": "ceu",
         "list": [
             {
                 "statusType":"ON",
                 "symbol": 1,
-                "percent": 50
-            },
-            {
-                "statusType":"OF",
-                "symbol": 0,
-                "percent": 50
-            },
-            {
-                "statusType":"None",
-                "symbol": 0,
-                "percent": 30
+                "percent": 90
             }
         ]
     },
     "product": {
-        "basis": "nbv",
+        "basis": "ceu",
         "list": [
             {
                 "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
-                "percent": 50
+                "percent": 80
             }
         ]
     },
@@ -101,13 +73,8 @@
         "basis": "ceu",
         "list": [
             {
-                "contractType": ["LC", "LT"],
-                "symbol": 0,
-                "percent": 100
-            },
-            {
-                "contractType": ["LF", "LP"],
-                "symbol": 0,
+                "contractType": ["LC", "LT", "LF", "LP"],
+                "symbol": 1,
                 "percent": 100
             }
         ]
