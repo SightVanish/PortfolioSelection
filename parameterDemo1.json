@@ -32,7 +32,7 @@
                 {
                     "Top1": 1,
                     "symbol": 0,
-                    "percent": 40
+                    "percent": 50
                 },
                 {
                     "Top2": 0,
@@ -42,7 +42,7 @@
                 {
                     "Top3": 1,
                     "symbol": 0,
-                    "percent": 30
+                    "percent": 70
                 }
             ]
         },

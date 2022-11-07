@@ -3,8 +3,8 @@
         "NBVOrCost": 1,
         "maxOrMin": 1
     },
-    "totalNBVFrom": 125000000,
-    "totalNBVTo": 15000000,
+    "totalNBVFrom": 12500000,
+    "totalNBVTo": 150000000,
     "totalCostFrom": "",
     "totalCostTo": "",
     "containersAge": {
@@ -30,7 +30,7 @@
         "TopLessee": {
             "list": [
                 {
-                    "Top1": 0,
+                    "Top1": 1,
                     "symbol": 0,
                     "percent": 40
                 },
@@ -40,9 +40,9 @@
                     "percent": 0
                 },
                 {
-                    "Top3": 0,
+                    "Top3": 1,
                     "symbol": 0,
-                    "percent": 30
+                    "percent": 39
                 }
             ]
         },
