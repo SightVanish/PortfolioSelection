@@ -7,4 +7,4 @@ pulp==2.6.0
 psycopg2==2.9.4
 cython==0.29.32
 cvxpy==1.1.20
-cylp0.91.5
+cylp==0.91.5

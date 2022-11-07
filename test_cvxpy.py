@@ -266,151 +266,159 @@ except Exception as e:
     print(e)
     ReportStatus('Processing Data Failed!', 'F', queryID)
     exit(1)
+def BuildModel():
+    print("==============================================================")
+    print('Model preparing...')
 
-print("==============================================================")
-print('Model preparing...')
-
-x = cp.Variable(shape=data.shape[0], boolean=True)
-# objective function 
-if NbvCost:
-    obj = cp.sum(cp.multiply(x, nbv))
-else:
-    obj = cp.sum(cp.multiply(x, cost))
-if maxOrMin:
-    objective = cp.Maximize(obj)
-else:
-    objective = cp.Minimize(obj)
-
-# constraints
-constraints = []
-# nbv
-if maxTotalNbv:
-    constraints.append(cp.sum(cp.multiply(x, nbv)) <= maxTotalNbv)
-    print('Set Max Nbv')
-if minTotalNbv:
-    constraints.append(cp.sum(cp.multiply(x, nbv)) >= minTotalNbv)
-    print('Set Min Nbv')
-# cost
-if maxTotalCost:
-    constraints.append(cp.sum(cp.multiply(x, cost)) <= maxTotalCost)
-    print('Set Max Cost')
-if minTotalCost:
-    constraints.append(cp.sum(cp.multiply(x, cost)) >= minTotalCost)
-    print('Set Min Cost')
-# container age
-if fleetAgeAvgLimit:
-    print('Set Container Average Age Limit')
-    if fleetAgeAvgGeq:
-        constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) >= fleetAgeAvgLimit * cp.sum(x))
+    x = cp.Variable(shape=data.shape[0], boolean=True)
+    # objective function 
+    if NbvCost:
+        obj = cp.sum(cp.multiply(x, nbv))
     else:
-        constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) <= fleetAgeAvgLimit * cp.sum(x))
-if fleetAgeBasis:
-    for i in range(numLimit):
-        if fleetAgeLimit[i]:
-            print('Set Container Age Limit', i)
-            if fleetAgeGeq[i]:
-                constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) >= \
-                    fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
-            else:
-                constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) <= \
-                    fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
-# weighted age
-if weightedAgeAvgLimit:
-    print('Set Weighted Average Age Limit')
-    if weightedAgeAvgGeq:
-        constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) >= \
-            weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
+        obj = cp.sum(cp.multiply(x, cost))
+    if maxOrMin:
+        objective = cp.Maximize(obj)
     else:
-        constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) <= \
-            weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
-if weightedAgeBasis:
-    for i in range(numLimit):
-        if weightedAgeLimit[i]:
-            print('Set Weighted Age Limit', i)
-            if weightedAgeGeq[i]:
-                constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) >= \
-                    weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
-            else:
-                constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) <= \
-                    weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
-# lessee
-if lesseeBasis:
-    for i in range(numLimit):
-        if lesseeLimit[i]:
-            if lesseeType[i] in lesseeOneHot:
-                print('Set Lessee Limit', i)
-                if lesseeGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >= \
-                        lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+        objective = cp.Minimize(obj)
+
+    # constraints
+    constraints = []
+    # nbv
+    if maxTotalNbv:
+        constraints.append(cp.sum(cp.multiply(x, nbv)) <= maxTotalNbv)
+        print('Set Max Nbv')
+    if minTotalNbv:
+        constraints.append(cp.sum(cp.multiply(x, nbv)) >= minTotalNbv)
+        print('Set Min Nbv')
+    # cost
+    if maxTotalCost:
+        constraints.append(cp.sum(cp.multiply(x, cost)) <= maxTotalCost)
+        print('Set Max Cost')
+    if minTotalCost:
+        constraints.append(cp.sum(cp.multiply(x, cost)) >= minTotalCost)
+        print('Set Min Cost')
+    # container age
+    if fleetAgeAvgLimit:
+        print('Set Container Average Age Limit')
+        if fleetAgeAvgGeq:
+            constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) >= fleetAgeAvgLimit * cp.sum(x))
+        else:
+            constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) <= fleetAgeAvgLimit * cp.sum(x))
+    if fleetAgeBasis:
+        for i in range(numLimit):
+            if fleetAgeLimit[i]:
+                print('Set Container Age Limit', i)
+                if fleetAgeGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) >= \
+                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
-                        lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
-            else:
-                print('Cannot Find', lesseeType[i])
-    # top1
-    for i in range(3):
-        if topLesseeLimit[i]:
-            print('Set Top', i+1)
-            if topLesseeGeq[i]:
-                constraints.append(cp.sum_largest( \
-                    cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) >= \
-                        topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
-            else:
-                constraints.append(cp.sum_largest( \
-                    cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <= \
-                        topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))  
-# status
-if statusBasis:
-    for i in range(numLimit):
-        if statusType[i]:
-            print('Set Status Limit', i)
-            if statusGeq[i]:
-                constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) >= \
-                    statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
-            else:
-                constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) <= \
-                    statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
-# product
-if productBasis:
-    for i in range(numLimit):
-        if productLimit[i]:
-            print('Set Produdct Limit', i)
-            if productGeq[i]:
-                constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) >= \
-                    productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
-            else:
-                constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) <= \
-                    productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
-# contract type
-if contractBasis:
-    for i in range(numLimit):
-        if contractLimit[i]:
-            print('Set Contract Type Limit', i)
-            if contractGeq[i]:
-                constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) >= \
-                    contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
-            else:
-                constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) <= \
-                    contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
+                    constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) <= \
+                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
+    # weighted age
+    if weightedAgeAvgLimit:
+        print('Set Weighted Average Age Limit')
+        if weightedAgeAvgGeq:
+            constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) >= \
+                weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
+        else:
+            constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) <= \
+                weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
+    if weightedAgeBasis:
+        for i in range(numLimit):
+            if weightedAgeLimit[i]:
+                print('Set Weighted Age Limit', i)
+                if weightedAgeGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) >= \
+                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) <= \
+                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
+    # lessee
+    if lesseeBasis:
+        for i in range(numLimit):
+            if lesseeLimit[i]:
+                if lesseeType[i] in lesseeOneHot:
+                    print('Set Lessee Limit', i)
+                    if lesseeGeq[i]:
+                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >= \
+                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                    else:
+                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
+                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                else:
+                    print('Cannot Find', lesseeType[i])
+        # top1
+        for i in range(3):
+            if topLesseeLimit[i]:
+                print('Set Top', i+1)
+                if topLesseeGeq[i]:
+                    constraints.append(cp.sum_largest( \
+                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) >= \
+                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                else:
+                    constraints.append(cp.sum_largest( \
+                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <= \
+                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))  
+    # status
+    if statusBasis:
+        for i in range(numLimit):
+            if statusType[i]:
+                print('Set Status Limit', i)
+                if statusGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) >= \
+                        statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) <= \
+                        statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
+    # product
+    if productBasis:
+        for i in range(numLimit):
+            if productLimit[i]:
+                print('Set Produdct Limit', i)
+                if productGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) >= \
+                        productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) <= \
+                        productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
+    # contract type
+    if contractBasis:
+        for i in range(numLimit):
+            if contractLimit[i]:
+                print('Set Contract Type Limit', i)
+                if contractGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) >= \
+                        contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) <= \
+                        contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
+    
+    prob = cp.Problem(objective, constraints)
+    return prob, x
 
-prob = cp.Problem(objective, constraints)
+
+def SolveModel(prob, timeLimit):
+    start_time = time.time()
+    print("==============================================================")
+    print('Model solving...')
+    # solve model
+    prob.solve(solver=cp.CBC, verbose=True, maximumSeconds=timeLimit, numberThreads=4)
+    print("==============================================================")
+    print("status:", prob.status)
+    print("==============================================================")
+    print('Time Cost', time.time() - start_time)
 
 
+prob, x = BuildModel()
 start_time = time.time()
 print("==============================================================")
 print('Model solving...')
 # solve model
-prob.solve(solver=cp.CBC, verbose=True, maximumSeconds=timeLimit, numberThreads=4)
+prob.solve(solver=cp.CBC, verbose=True)
 print("==============================================================")
 print("status:", prob.status)
 print("==============================================================")
 print('Time Cost', time.time() - start_time)
-
-
-("==============================================================")
-print('Result....')
-print(x.value)
-
 
 
 
