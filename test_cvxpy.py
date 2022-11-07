@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, PulpSolverError
-from pulp.apis import PULP_CBC_CMD
 import time
 import heapq
 import json
@@ -23,95 +21,14 @@ def ReportStatus(msg, flag, queryID):
     """
     Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}' where id='{2}'".format(msg, flag, queryID)
-    print("============================================================================================================================")
-    print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-    conn.autocommit = True
-    cur = conn.cursor()
-    cur.execute(sql)
-    conn.commit()
-    conn.close()
-
-def ConnectDatabase():
-    """
-    Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
-    """
-    try:
-        print('Parameters reading...')
-        sqlParameter = "select python_json, id from fll_t_dw.biz_fir_query_parameter_definition where success_flag='T'"
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-        paramInput = pd.read_sql(sqlParameter, conn)
-        if paramInput.shape[0] == 0:
-            raise Exception('No Valid Query Request is Found!')
-        elif paramInput.shape[0] > 1:
-            raise Exception('More than One Valid Query Requests are Found!')
-        queryID = paramInput['id'][0]
-        param = json.loads(paramInput['python_json'][0])
-    except Exception as e:
-        print("Loading Parameters from GreenPlum Failed!\n", e)
-        exit(1)
-
-    try:
-        print('Data loading...')
-        print('Query ID:', queryID)
-        sqlInput = """
-            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
-            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
-            from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        """.format(queryID) 
-        data = pd.read_sql(sqlInput, conn)
-
-        if data.shape[0] == 0:
-            raise Exception("No Data Available!")
-        print('Input data shape:', data.shape)
-        print(param)
-        conn.close()
-    except Exception as e:
-        print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
-        exit(1)
-
-    return queryID, param, data
-
-def OutputPackage(data, result, queryID):
-    """
-    Output final package to fll_t_dw.biz_fir_asset_package.
-    """
-    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id) values %s"
-    try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-        conn.autocommit = True
-        cur = conn.cursor()
-        print('Writing data...')
-        values_list = []
-        for i in range(len(result)):
-            if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex))
-        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print("Writing data to GreenPlum Failed!\n", e) 
-        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
-        exit(1)
+    print(msg)
 
 print('Data reading...')
-
-# rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', \
-#     sheet_name='数据', engine='pyxlsb')
-# rawData = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', \
-#     'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', \
-#     'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
-# rawData.columns = ['unit_id', 'contract_num', 'cost', 'product', \
-#     'customer', 'contract', 'nbv', 'billing', \
-#     'fleet_year', 'weighted_age', 'ceu', 'teu']
 data = pd.read_csv('./local_data.csv')
 
 print('Data loading...')
 with open("./parameterDemo2.json") as f:
     param = json.load(f)
-# data = rawData.sample(100000).copy()
 queryID = "local_test_id"
 print(param)
 print(data.shape)
@@ -119,7 +36,7 @@ print(data.shape)
 print("==============================================================")
 print('Parameters parsing...')
 try:
-    NbvCost = param['prefer']['NBVOrCost']
+    NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
 
     fleetAgeLowBound = [None for _ in range(numLimit)]
@@ -150,14 +67,13 @@ try:
     maxTotalCost = param['totalCostTo']
 
     topLesseeLimit = [
-        param['lessee']['TopLessee']['list'][0]['percent'] / 100,
-        param['lessee']['TopLessee']['list'][1]['percent'] / 100,
-        param['lessee']['TopLessee']['list'][2]['percent'] / 100]
+        param['lessee']['topLessee']['top1']['percent'] / 100,
+        param['lessee']['topLessee']['top2']['percent'] / 100,
+        param['lessee']['topLessee']['top3']['percent'] / 100]
     topLesseeGeq = [
-        param['lessee']['TopLessee']['list'][0]['symbol'],
-        param['lessee']['TopLessee']['list'][1]['symbol'],
-        param['lessee']['TopLessee']['list'][2]['symbol']]
-
+        param['lessee']['topLessee']['top1']['symbol'],
+        param['lessee']['topLessee']['top2']['symbol'],
+        param['lessee']['topLessee']['top3']['symbol']]
     fleetAgeAvgLimit = param['containersAge']['average']['averageContainersAge']
     fleetAgeAvgGeq = param['containersAge']['average']['symbol']
     fleetAgeBasis = param['containersAge']['basis']
@@ -410,77 +326,237 @@ def SolveModel(prob, timeLimit):
 
 
 prob, x = BuildModel()
-start_time = time.time()
-print("==============================================================")
-print('Model solving...')
-# solve model
-prob.solve(solver=cp.CBC, verbose=True)
-print("==============================================================")
-print("status:", prob.status)
-print("==============================================================")
-print('Time Cost', time.time() - start_time)
+prob = SolveModel(prob, timeLimit)
 
 
 
-
-
-
-# TEST TOP3 SELECTION
-passed = True
-
-import heapq
-print('\t Top lessee:')
-result = x.value
-basis = ceu
-top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
-resultTop3Lessee = [
-    top3Lessee[0][1]/sum(result*basis),
-    (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis),
-    (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis)
-]
-if topLesseeLimit[0]:
-    print('\t \t top 1 {0} is {1}, to {2}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4), topLesseeLimit[0]))
-    if topLesseeGeq[0]:
-        if resultTop3Lessee[0] < topLesseeLimit[0]:
-            print('\t \t \t >= failed')
+def ValidResult(result):
+    passed = True
+    print('======================================================================')
+    resultNbv = sum(result*nbv)
+    print("nbv: {0}".format(round(resultNbv, 4)))
+    if maxTotalNbv:
+        if (resultNbv - maxTotalNbv) > 0.1:
             passed = False
-    else:
-        if resultTop3Lessee[0] > topLesseeLimit[0]:
-            print('\t \t \t <= failed')
+            print('\t max failed')
+    if minTotalNbv:
+        if (minTotalNbv - resultNbv) > 0.1: 
             passed = False
+            print('\t min failed')
+    if (maxTotalNbv or minTotalNbv) and passed:
+        print('\t passed')
+    resultCost = sum(result*cost)
+    print("cost: {0}".format(round(resultCost, 4)))
+    if maxTotalCost:
+        if (resultCost - maxTotalCost) > 0.1:
+            passed = False
+            print('\t max failed')
+    if minTotalCost:
+        if (minTotalCost - resultCost) > 0.1:
+            passed = False
+            print('\t min failed')
+    if (maxTotalCost or minTotalCost) and passed:
+        print('\t passed')
+
+    print("container age:", fleetAgeBasis)
+    if fleetAgeAvgLimit:
+        resultFleetAgeAvg = sum(result*fleetAgeAvg)/sum(result)
+        print('\t container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
+        if fleetAgeAvgGeq:
+            if resultFleetAgeAvg < fleetAgeAvgLimit:
+                passed = False
+                print('\t \t >= failed')
+        else:
+            if resultFleetAgeAvg > fleetAgeAvgLimit:
+                passed = False
+                print('\t \t <= failed')
+        if passed:
+            print('\t \t passed')
+    if fleetAgeBasis:
+        resultFleetAge = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if fleetAgeLimit[i]:
+                resultFleetAge[i] = sum(result*fleetAge[i]*basis[fleetAgeBasis])/sum(result*basis[fleetAgeBasis])
+                print("\t container age from {0} to {1}: {2}".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(resultFleetAge[i], 4)))
+                if fleetAgeGeq[i]:
+                    if resultFleetAge[i] < fleetAgeLimit[i]:
+                        passed = False
+                        print('\t \t >= failed')
+                else:
+                    if resultFleetAge[i] > fleetAgeLimit[i]:
+                        passed = False
+                        print('\t \t <= failed')
+                if passed:
+                    print('\t \t passed')
+
+    print("weighted age:", weightedAgeBasis)
+    if weightedAgeAvgLimit:
+        resultWeightedAgeAvg = sum(result*weightedAgeAvg)/sum(result*ceu)
+        print('\t weighted average age is {0}'.format(round(resultWeightedAgeAvg, 4)))
+        if weightedAgeAvgGeq:
+            if resultWeightedAgeAvg < weightedAgeAvgLimit:
+                print('\t \t >= failed')
+                passed = False
+        else:
+            if resultWeightedAgeAvg > weightedAgeAvgLimit:
+                print('\t \t <= failed')
+                passed = False
+        if passed:
+            print('\t \t passed')
+    if weightedAgeBasis:
+        resultWeightedAge = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if weightedAgeLimit[i]:
+                resultWeightedAge[i] = sum(result*weightedAge[i]*basis[weightedAgeBasis])/sum(result*basis[weightedAgeBasis])
+                print("\t weighted age from {0} to {1} is {2}".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(resultWeightedAge[i], 4)))
+                if weightedAgeGeq[i]:
+                    if resultWeightedAge[i] < weightedAgeLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultWeightedAge[i] > weightedAgeLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
+    if lesseeBasis:
+        print('Certain Lessee:')
+        resultLessee = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if lesseeLimit[i]:
+                if lesseeType[i] in lesseeOneHot:
+                    resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
+                    print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
+                    if lesseeGeq[i]:
+                        if resultLessee[i] < lesseeLimit[i]:
+                            print('\t \t >= failed')
+                            passed = False
+                    else:
+                        if resultLessee[i] > lesseeLimit[i]:
+                            print('\t \t <= failed')
+                            passed = False
+                    if passed:
+                        print('\t \t passed')
+                else:
+                    print('Can not find {0}'.format(lesseeType[i]))
+
+        print('Top lessee:')
+        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+        resultTop3Lessee = [
+            top3Lessee[0][1]/sum(result*basis[lesseeBasis]),
+            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis[lesseeBasis]),
+            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis[lesseeBasis])
+        ]
+        if topLesseeLimit[0]:
+            print('\t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
+            if topLesseeGeq[0]:
+                if resultTop3Lessee[0] < topLesseeLimit[0]:
+                    print('\t \t >= failed')
+                    passed = False
+            else:
+                if resultTop3Lessee[0] > topLesseeLimit[0]:
+                    print('\t \t <= failed')
+                    passed = False
+            if passed:
+                print('\t \t passed')
+        if topLesseeLimit[1]:
+            if len(top3Lessee) >= 2:
+                print('\t top 2 {0} {1} is {2}'.format(top3Lessee[0][0], top3Lessee[1][0], round(resultTop3Lessee[1], 4)))
+                if topLesseeGeq[1]:
+                    if resultTop3Lessee[1] < topLesseeLimit[1]:
+                        print('\t \t >= failed')
+                        passed = False
+                    else:
+                        if resultTop3Lessee[1] > topLesseeLimit[1]:
+                            print('\t \t <= failed')
+                            passed = False
+                if passed:
+                    print('\t \t passed')
+            else:
+                print('\t Only one lessee.')
+        if topLesseeLimit[2]:
+            if len(top3Lessee) >= 3:
+                print('\t top 3 {0} {1} {2} is {3}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], round(resultTop3Lessee[2], 4)))
+                if topLesseeGeq[2]:
+                    if resultTop3Lessee[2] < topLesseeLimit[2]:
+                        print('\t \t >= failed')
+                        passed = False
+                    else:
+                        if resultTop3Lessee[2] > topLesseeLimit[2]:
+                            print('\t \t <= failed')
+                            passed = False
+                if passed:
+                    print('\t \t passed')
+            else:
+                print('\t Only two lessee.')
+        
+    print('billing status:', statusBasis)
+    if statusBasis:
+        resultStatus = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if statusType[i]:
+                if statusType[i] == 'ON':
+                    resultStatus[i] = sum(result*onHireStatus*basis[statusBasis])/sum(result*basis[statusBasis])
+                    print('\t OnHire is {0}'.format(round(resultStatus[i], 4)))
+                if statusType[i] == 'OF':
+                    resultStatus[i] = sum(result*offHireStatus*basis)/sum(result*basis)
+                    print('\t OffHire is {0}'.format(round(resultStatus[i], 4)))
+                if statusType[i] == 'None':
+                    resultStatus[i] = sum(result*noneHireStatus*basis)/sum(result*basis)
+                    print('\t NoneHire is {0}'.format(round(resultStatus[i], 4)))
+                
+                if statusGeq[i]:
+                    if resultStatus[i] < statusLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultStatus[i] > statusLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
+    print("product:", productBasis)
+    if productBasis:
+        resultProduct = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if productLimit[i]:
+                resultProduct[i] = sum(result*product[i]*basis[productBasis])/sum(result*basis[productBasis])
+                print("\t product {0} is {1}:".format(productType[i], round(resultProduct[i], 4)))
+                if productGeq[i]:
+                    if resultProduct[i] < productLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
+                else:
+                    if resultProduct[i] > productLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
+
+    print("contract type:", contractBasis)
+    if contractBasis:
+        resultContract = [None for _ in range(numLimit)]
+        for i in range(numLimit):
+            if contractLimit[i]:
+                resultContract[i] = sum(result*contract[i]*basis[contractBasis])/sum(result*basis[contractBasis])
+                print("\t contract type {0} is {1}:".format(contractType[i], round(resultContract[i], 4))) 
+                if contractGeq[i]:
+                    if resultContract[i] < contractLimit[i]:
+                        print('\t \t >= failed')
+                else:
+                    if resultContract[i] > contractLimit[i]:
+                        print('\t \t <= failed')
+                if passed:
+                    print('\t \t passed')
+
     if passed:
-        print('\t \t \t passed')
-if topLesseeLimit[1]:
-    if len(top3Lessee) >= 2:
-        print('\t \t top 2 {0} {1} is {2}, to {3}'.format(top3Lessee[0][0], top3Lessee[1][0], round(resultTop3Lessee[1], 4), topLesseeLimit[1]))
-        if topLesseeGeq[1]:
-            if resultTop3Lessee[1] < topLesseeLimit[1]:
-                print('\t \t \t >= failed')
-                passed = False
-            else:
-                if resultTop3Lessee[1] > topLesseeLimit[1]:
-                    print('\t \t \t <= failed')
-                    passed = False
-        if passed:
-            print('\t \t \t passed')
-    else:
-        print('\t \t \t Only one lessee.')
-if topLesseeLimit[2]:
-    if len(top3Lessee) >= 3:
-        print('\t \t top 3 {0} {1} {2} is {3}, to {4}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], round(resultTop3Lessee[2], 4), topLesseeLimit[2]))
-        if topLesseeGeq[2]:
-            if resultTop3Lessee[2] < topLesseeLimit[2]:
-                print('\t \t \t >= failed')
-                passed = False
-            else:
-                if resultTop3Lessee[2] > topLesseeLimit[2]:
-                    print('\t \t \t <= failed')
-                    passed = False
-        if passed:
-            print('\t \t \t passed')
-    else:
-        print('\t \t \t Only two lessee.')
+        print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
+    return passed
 
+ValidResult(x.value)
 
 # import cvxpy as cp
 # import numpy as  np

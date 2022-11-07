@@ -10,6 +10,7 @@ import psycopg2.extras
 import warnings
 import sys
 import uuid
+import datetime
 
 numLimit = 5 # maximum num of constraints in each condition
 timeLimit = 200
@@ -22,7 +23,7 @@ def ReportStatus(msg, flag, queryID):
     """
     Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}' where id='{2}'".format(msg, flag, queryID)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
@@ -105,7 +106,7 @@ def OutputPackage(data, result, queryID):
     """
     Output final package to fll_t_dw.biz_fir_asset_package.
     """
-    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id) values %s"
+    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
     try:
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
         conn.autocommit = True
@@ -114,7 +115,7 @@ def OutputPackage(data, result, queryID):
         values_list = []
         for i in range(len(result)):
             if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex))
+                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0))
         psycopg2.extras.execute_values(cur, sqlOutput, values_list)
         conn.commit()
         conn.close()
@@ -127,17 +128,10 @@ queryID, param, data = ConnectDatabase()
 
 # # TEST read local file
 # print('Data loading...')
-# with open("./parameterDemo1.json") as f:
+# with open("./parameterDemoAll.json") as f:
 #     param = json.load(f)
-# rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', \
-#     sheet_name='数据', engine='pyxlsb')
-# data = rawData[['Unit Id Fz', 'Contract Num', 'Cost', 'Product', \
-#     'Contract Cust Id', 'Contract Lease Type', 'Nbv', 'Billing Status Fz', \
-#     'Fleet Year Fz', 'Age x CEU', 'Ceu Fz', 'Teu Fz']].copy()
-# data.columns = ['unit_id', 'contract_num', 'cost', 'product', \
-#     'customer', 'contract', 'nbv', 'billing', \
-#     'fleet_year', 'weighted_age', 'ceu', 'teu']
-# data = data.iloc[:20000].copy()
+# rawData = pd.read_csv('./local_data.csv')
+# data = rawData.iloc[:20000].copy()
 # print(param)
 # print(data.shape)
 # queryID = "local_test_id"
@@ -145,7 +139,7 @@ queryID, param, data = ConnectDatabase()
 print("==============================================================")
 print('Parameters parsing...')
 try:
-    NbvCost = param['prefer']['NBVOrCost']
+    NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
 
     fleetAgeLowBound = [None for _ in range(numLimit)]
@@ -176,14 +170,13 @@ try:
     maxTotalCost = param['totalCostTo']
 
     topLesseeLimit = [
-        param['lessee']['TopLessee']['list'][0]['percent'] / 100,
-        param['lessee']['TopLessee']['list'][1]['percent'] / 100,
-        param['lessee']['TopLessee']['list'][2]['percent'] / 100]
+        param['lessee']['topLessee']['top1']['percent'] / 100,
+        param['lessee']['topLessee']['top2']['percent'] / 100,
+        param['lessee']['topLessee']['top3']['percent'] / 100]
     topLesseeGeq = [
-        param['lessee']['TopLessee']['list'][0]['symbol'],
-        param['lessee']['TopLessee']['list'][1]['symbol'],
-        param['lessee']['TopLessee']['list'][2]['symbol']]
-
+        param['lessee']['topLessee']['top1']['symbol'],
+        param['lessee']['topLessee']['top2']['symbol'],
+        param['lessee']['topLessee']['top3']['symbol']]
     fleetAgeAvgLimit = param['containersAge']['average']['averageContainersAge']
     fleetAgeAvgGeq = param['containersAge']['average']['symbol']
     fleetAgeBasis = param['containersAge']['basis']
@@ -621,8 +614,8 @@ def ValidResult(result):
                             passed = False
                     if passed:
                         print('\t \t passed')
-            else:
-                print('Can not find {0}'.format(lesseeType[i]))
+                else:
+                    print('Can not find {0}'.format(lesseeType[i]))
 
         print('Top lessee:')
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])

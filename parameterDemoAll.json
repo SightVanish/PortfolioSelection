@@ -1,6 +1,6 @@
 {
     "prefer": {
-        "NBVOrCost": 0,
+        "nbvorCost": 0,
         "maxOrMin": 0
     },
     "totalNBVFrom": 10000000,
@@ -40,24 +40,19 @@
     },
     "lessee": {
         "basis": "ceu",
-        "TopLessee": {
-            "list": [
-                {
-                    "Top1": 1,
-                    "symbol": 0,
-                    "percent": 50
-                },
-                {
-                    "Top2": 0,
-                    "symbol": 0,
-                    "percent": 0
-                },
-                {
-                    "Top3": 1,
-                    "symbol": 0,
-                    "percent": 70
-                }
-            ]
+        "topLessee": {
+            "top3": {
+                "symbol": 0,
+                "percent": 70
+            },
+            "top1": {
+                "symbol": 0,
+                "percent": 50
+            },
+            "top2": {
+                "symbol": 0,
+                "percent": 0
+            }
         },
         "list": [
             {

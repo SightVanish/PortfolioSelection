@@ -3,8 +3,8 @@
         "nbvorCost": 1,
         "maxOrMin": 1
     },
-    "totalNBVFrom": 125000000,
-    "totalNBVTo": 150000000,
+    "totalNBVFrom": "",
+    "totalNBVTo": "",
     "totalCostFrom": "",
     "totalCostTo": "",
     "containersAge": {
@@ -19,22 +19,22 @@
     "weightedAge": {
         "average": {
             "symbol": 0,
-            "averageWeighedAge": 3.75
+            "averageWeighedAge": 0
         },
         "basis": "",
         "list": [
         ]
     },
     "lessee": {
-        "basis": "ceu",
+        "basis": "",
         "topLessee": {
             "top3": {
                 "symbol": 0,
-                "percent": 70
+                "percent": 0
             },
             "top1": {
                 "symbol": 0,
-                "percent": 50
+                "percent": 0
             },
             "top2": {
                 "symbol": 0,
@@ -45,33 +45,18 @@
         ]
     },
     "status": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "statusType":"ON",
-                "symbol": 1,
-                "percent": 90
-            }
         ]
     },
     "product": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "productType": ["D20", "D40", "D4H"],
-                "symbol": 1,
-                "percent": 80
-            }
         ]
     },
     "contractType": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
-            {
-                "contractType": ["LC", "LT", "LF", "LP"],
-                "symbol": 1,
-                "percent": 100
-            }
         ]
     }
 }
