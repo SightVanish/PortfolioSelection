@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpMinimize, LpBinary, LpStatus, PulpSolverError
+from pulp.apis import PULP_CBC_CMD
 import time
+import heapq
 import json
 import psycopg2
 import psycopg2.extras
@@ -29,34 +32,6 @@ def ReportStatus(msg, flag, queryID):
     cur.execute(sql)
     conn.commit()
     conn.close()
-
-def DecideBasis(basis, ceu, teu, nbv, cost, queryID):
-    """
-    Return [ceu / teu / nbv / cost] basde on basis.
-    """
-    if basis == 'ceu':
-        return ceu
-    elif basis == 'teu':
-        return ceu
-    elif basis == 'nbv':
-        return ceu
-    elif basis == 'cost':
-        return ceu
-    else:
-        ReportStatus('Basis is not valid!', 'F', queryID)
-
-def DecideStatus(status, onHireStatus, offHireStatus, noneHireStatus, queryID):
-    """
-    Return [OnHire / OffHire / None] based on status.
-    """
-    if status == 'ON':
-        return "OnHire", onHireStatus
-    elif status == 'OF':
-        return "OffHire", offHireStatus
-    elif status == 'None':
-        return "NoneHire", noneHireStatus
-    else:
-        ReportStatus('Status is not valid!', 'F', queryID)
 
 def ConnectDatabase():
     """
@@ -121,7 +96,6 @@ def OutputPackage(data, result, queryID):
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
-
 print('Data reading...')
 rawData = pd.read_excel(io='./test_data_with_constraints.xlsb', \
     sheet_name='数据', engine='pyxlsb')
@@ -133,14 +107,12 @@ rawData.columns = ['unit_id', 'contract_num', 'cost', 'product', \
     'fleet_year', 'weighted_age', 'ceu', 'teu']
 
 print('Data loading...')
-with open("./parameterDemo1.json") as f:
+with open("./parameterDemo2.json") as f:
     param = json.load(f)
 data = rawData.copy()
 queryID = "local_test_id"
 print(param)
 print(data.shape)
-
-
 
 print("==============================================================")
 print('Parameters parsing...')
@@ -278,7 +250,16 @@ try:
         weightedAge.append(data['WeightedAge{0}'.format(i)].to_numpy() if weightedAgeLimit[i] else None)
         product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
         contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
-
+    basis = {}
+    basis['nbv'] = nbv
+    basis['ceu'] = ceu
+    basis['teu'] = teu
+    basis['cost'] = cost
+    hireStatus = {}
+    hireStatus['ON'] = onHireStatus
+    hireStatus['OF'] = offHireStatus
+    hireStatus['None'] = noneHireStatus
+    
 except Exception as e:
     print(e)
     ReportStatus('Processing Data Failed!', 'F', queryID)
@@ -323,16 +304,15 @@ def BuildModel():
         else:
             constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) <= fleetAgeAvgLimit * cp.sum(x))
     if fleetAgeBasis:
-        basis = DecideBasis(fleetAgeBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if fleetAgeLimit[i]:
                 print('Set Container Age Limit', i)
                 if fleetAgeGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, fleetAge[i]), basis)) <= \
-                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) >= \
+                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, fleetAge[i]), basis)) >= \
-                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) <= \
+                        fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
     # weighted age
     if weightedAgeAvgLimit:
         print('Set Weighted Average Age Limit')
@@ -342,100 +322,86 @@ def BuildModel():
         else:
             constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) <= \
                 weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
-
-
     if weightedAgeBasis:
-        basis = DecideBasis(weightedAgeBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if weightedAgeLimit[i]:
                 print('Set Weighted Age Limit', i)
                 if weightedAgeGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, weightedAge[i]), basis)) >= \
-                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis)))
-
+                    constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) >= \
+                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, weightedAge[i]), basis)) <= \
-                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis)))
-
+                    constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) <= \
+                        weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
     # lessee
     if lesseeBasis:
-        basis = DecideBasis(lesseeBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if lesseeLimit[i]:
                 if lesseeType[i] in lesseeOneHot:
                     print('Set Lessee Limit', i)
                     if lesseeGeq[i]:
-                        constraints.append(cp.sum(cp.multiply(cp.multiply(x, lesseeOneHot[lesseeType[i]]), \
-                            basis)) >= lesseeLimit[i] * cp.sum(cp.multiply(x, basis)))
+                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >= \
+                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
                     else:
-                        constraints.append(cp.sum(cp.multiply(cp.multiply(x, lesseeOneHot[lesseeType[i]]), \
-                            basis)) <= lesseeLimit[i] * cp.sum(cp.multiply(x, basis)))
+                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
+                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
                 else:
                     print('Cannot Find', lesseeType[i])
         # top1
-        constraints.append(cp.sum_largest( \
-            cp.hstack([cp.sum(cp.multiply(cp.multiply(x, lesseeOneHot[i]), basis)) for i in lesseeOneHot]), 1) <= \
-                topLesseeLimit[0] * cp.sum(cp.multiply(x, basis)))
-        # top3
-        constraints.append(cp.sum_largest( \
-            cp.hstack([cp.sum(cp.multiply(cp.multiply(x, lesseeOneHot[i]), basis)) for i in lesseeOneHot]), 3) <= \
-                topLesseeLimit[2] * cp.sum(cp.multiply(x, basis)))
-    
-
-
-
-    
+        for i in range(3):
+            if topLesseeLimit[i]:
+                print('Set Top', i+1)
+                if topLesseeGeq[i]:
+                    constraints.append(cp.sum_largest( \
+                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) >= \
+                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                else:
+                    constraints.append(cp.sum_largest( \
+                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <= \
+                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))  
     # status
     if statusBasis:
-        basis = DecideBasis(statusBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if statusType[i]:
                 print('Set Status Limit', i)
-                statusName, status = DecideStatus(statusType[i], onHireStatus, offHireStatus, noneHireStatus, queryID)
                 if statusGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, status), basis)) >= \
-                        statusLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) >= \
+                        statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, status), basis)) <= \
-                        statusLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) <= \
+                        statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
     # product
     if productBasis:
-        basis = DecideBasis(productBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if productLimit[i]:
                 print('Set Produdct Limit', i)
                 if productGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, product[i]), basis)) >= \
-                        productLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) >= \
+                        productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, product[i]), basis)) <= \
-                        productLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) <= \
+                        productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
     # contract type
     if contractBasis:
-        basis = DecideBasis(contractBasis, ceu, teu, nbv, cost, queryID)
         for i in range(numLimit):
             if contractLimit[i]:
                 print('Set Contract Type Limit', i)
                 if contractGeq[i]:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, contract[i]), basis)) >= \
-                        contractLimit[i] * cp.sum(cp.multiply(x, basis)))
+                    constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) >= \
+                        contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
                 else:
-                    constraints.append(cp.sum(cp.multiply(cp.multiply(x, contract[i]), basis)) <= \
-                        contractLimit[i] * cp.sum(cp.multiply(x, basis)))
-    
-
+                    constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) <= \
+                        contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
     
     prob = cp.Problem(objective, constraints)
     return prob, x
 
 
-def SolveModel(prob, timelimit=100):
+def SolveModel(prob, timeLimit):
     start_time = time.time()
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.SCIP, verbose=True, scip_params={"limits/time": timelimit})
-
+    prob.solve(solver=cp.SCIP, verbose=True, scip_params={"limits/time": timeLimit})
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
@@ -444,12 +410,74 @@ def SolveModel(prob, timelimit=100):
     return prob
 
 prob, x = BuildModel()
-
 prob = SolveModel(prob, 100)
 
+print('Result....')
+print(x.value)
 
 
 
+
+
+
+
+
+
+
+
+
+# import heapq
+# print('\t Top lessee:')
+# result = x.value
+# basis = ceu
+# top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+# resultTop3Lessee = [
+#     top3Lessee[0][1]/sum(result*basis),
+#     (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis),
+#     (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis)
+# ]
+# if topLesseeLimit[0]:
+#     print('\t \t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
+#     if topLesseeGeq[0]:
+#         if resultTop3Lessee[0] < topLesseeLimit[0]:
+#             print('\t \t \t >= failed')
+#             passed = False
+#     else:
+#         if resultTop3Lessee[0] > topLesseeLimit[0]:
+#             print('\t \t \t <= failed')
+#             passed = False
+#     if passed:
+#         print('\t \t \t passed')
+# if topLesseeLimit[1]:
+#     if len(top3Lessee) >= 2:
+#         print('\t \t top 2 {0} {1} is {2}'.format(top3Lessee[0][0], top3Lessee[1][0], round(resultTop3Lessee[1], 4)))
+#         if topLesseeGeq[1]:
+#             if resultTop3Lessee[1] < topLesseeLimit[1]:
+#                 print('\t \t \t >= failed')
+#                 passed = False
+#             else:
+#                 if resultTop3Lessee[1] > topLesseeLimit[1]:
+#                     print('\t \t \t <= failed')
+#                     passed = False
+#         if passed:
+#             print('\t \t \t passed')
+#     else:
+#         print('\t \t \t Only one lessee.')
+# if topLesseeLimit[2]:
+#     if len(top3Lessee) >= 3:
+#         print('\t \t top 3 {0} {1} {2} is {3}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], round(resultTop3Lessee[2], 4)))
+#         if topLesseeGeq[2]:
+#             if resultTop3Lessee[2] < topLesseeLimit[2]:
+#                 print('\t \t \t >= failed')
+#                 passed = False
+#             else:
+#                 if resultTop3Lessee[2] > topLesseeLimit[2]:
+#                     print('\t \t \t <= failed')
+#                     passed = False
+#         if passed:
+#             print('\t \t \t passed')
+#     else:
+#         print('\t \t \t Only two lessee.')
 
 
 
