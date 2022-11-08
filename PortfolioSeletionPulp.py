@@ -620,9 +620,9 @@ def ValidResult(result):
         print('Top lessee:')
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis)) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         resultTop3Lessee = [
-            top3Lessee[0][1]/sum(result*basis),
-            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis),
-            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis)
+            top3Lessee[0][1]/sum(result*basis) if len(top3Lessee) >= 1 else None,
+            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis) if len(top3Lessee) >= 2 else None,
+            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis) if len(top3Lessee) >= 3 else None
         ]
         if topLesseeLimit[0]:
             print('\t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
@@ -752,6 +752,6 @@ else:
         
     else:
         ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
-print('Final Algorithm Status:', LpStatus[prob.status])
+# print('Final Algorithm Status:', LpStatus[prob.status])
 
 print('Total Time Cost:', time.time() - total_time)

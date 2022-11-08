@@ -9,9 +9,10 @@ import warnings
 import sys
 import uuid
 import cvxpy as cp
+import datetime
 
 numLimit = 5 # maximum num of constraints in each condition
-timeLimit = 200
+timeLimit = 500
 total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
@@ -21,17 +22,91 @@ def ReportStatus(msg, flag, queryID):
     """
     Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
     """
-    print(msg)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
+    print("============================================================================================================================")
+    print("Reporting issue:", msg)
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute(sql)
+    conn.commit()
+    conn.close()
 
-print('Data reading...')
-data = pd.read_csv('./local_data.csv')
+def ConnectDatabase():
+    """
+    Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
+    """
+    try:
+        print('Parameters reading...')
+        sqlParameter = "select python_json, id from fll_t_dw.biz_fir_query_parameter_definition where success_flag='T'"
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        paramInput = pd.read_sql(sqlParameter, conn)
+        if paramInput.shape[0] == 0:
+            raise Exception('No Valid Query Request is Found!')
+        elif paramInput.shape[0] > 1:
+            raise Exception('More than One Valid Query Requests are Found!')
+        queryID = paramInput['id'][0]
+        param = json.loads(paramInput['python_json'][0])
+    except Exception as e:
+        print("Loading Parameters from GreenPlum Failed!\n", e)
+        exit(1)
 
-print('Data loading...')
-with open("./parameterDemo2.json") as f:
-    param = json.load(f)
-queryID = "local_test_id"
-print(param)
-print(data.shape)
+    try:
+        print('Data loading...')
+        print('Query ID:', queryID)
+        sqlInput = """
+            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
+            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
+            from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
+        """.format(queryID) 
+        data = pd.read_sql(sqlInput, conn)
+
+        if data.shape[0] == 0:
+            raise Exception("No Data Available!")
+        print('Input data shape:', data.shape)
+        print(param)
+        conn.close()
+    except Exception as e:
+        print(e)
+        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
+        exit(1)
+
+    return queryID, param, data
+
+def OutputPackage(data, result, queryID):
+    """
+    Output final package to fll_t_dw.biz_fir_asset_package.
+    """
+    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
+    try:
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        conn.autocommit = True
+        cur = conn.cursor()
+        print('Writing data...')
+        values_list = []
+        for i in range(len(result)):
+            if result[i]:
+                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0))
+        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Writing data to GreenPlum Failed!\n", e) 
+        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
+        exit(1)
+
+
+# queryID, param, data = ConnectDatabase()
+
+# print('Data reading...')
+# data = pd.read_csv('./local_data.csv')
+# print('Data loading...')
+# with open("./parameterDemo1.json") as f:
+#     param = json.load(f)
+# queryID = "local_test_id"
+# print(param)
+# print(data.shape)
+
 
 print("==============================================================")
 print('Parameters parsing...')
@@ -176,15 +251,16 @@ try:
     hireStatus = {}
     hireStatus['ON'] = onHireStatus
     hireStatus['OF'] = offHireStatus
-    hireStatus['None'] = noneHireStatus
-    
+    hireStatus['None'] = noneHireStatus 
 except Exception as e:
     print(e)
     ReportStatus('Processing Data Failed!', 'F', queryID)
     exit(1)
+
 def BuildModel():
     print("==============================================================")
     print('Model preparing...')
+    start_time = time.time()
 
     x = cp.Variable(shape=data.shape[0], boolean=True)
     # objective function 
@@ -310,7 +386,9 @@ def BuildModel():
                         contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
     
     prob = cp.Problem(objective, constraints)
+    print('Time Cost', time.time() - start_time)
     return prob, x
+
 
 
 def SolveModel(prob, timeLimit):
@@ -421,7 +499,7 @@ def ValidResult(result):
                     print('\t \t passed')
 
     if lesseeBasis:
-        print('Certain Lessee:')
+        print('Certain Lessee:', lesseeBasis)
         resultLessee = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if lesseeLimit[i]:
@@ -441,7 +519,7 @@ def ValidResult(result):
                 else:
                     print('Can not find {0}'.format(lesseeType[i]))
 
-        print('Top lessee:')
+        print('Top lessee:', lesseeBasis)
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         resultTop3Lessee = [
             top3Lessee[0][1]/sum(result*basis[lesseeBasis]),
@@ -556,28 +634,3 @@ def ValidResult(result):
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
     return passed
 
-ValidResult(x.value)
-
-# import cvxpy as cp
-# import numpy as  np
-# import time
-# n = 100000
-# x = cp.Variable(shape=n, boolean=True)
-# a = np.arange(n)
-# b = np.ones(n)
-
-# objective = cp.Maximize(cp.sum(cp.multiply(x, a)))
-# # constraints
-# constraints = [cp.sum(cp.multiply(x, b)) <= n/10]
-
-# prob = cp.Problem(objective, constraints)
-
-# start_time = time.time()
-# print("==============================================================")
-# print('Model solving...')
-# # solve model
-# prob.solve(solver=cp.SCIP, verbose=True)
-# print("==============================================================")
-# print("status:", prob.status)
-# print("==============================================================")
-# print('Time Cost', time.time() - start_time)
