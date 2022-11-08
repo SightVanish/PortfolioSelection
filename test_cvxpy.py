@@ -10,9 +10,15 @@ import sys
 import uuid
 import cvxpy as cp
 import datetime
-
+"""
+Check before submit
+1. enable ReportStatus
+2. enable OutputPackage
+3. disable reading local data
+"""
 numLimit = 5 # maximum num of constraints in each condition
-timeLimit = 800
+timeLimit = 600
+threadLimit = 4
 total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
@@ -25,12 +31,12 @@ def ReportStatus(msg, flag, queryID):
     sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
-    # conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-    # conn.autocommit = True
-    # cur = conn.cursor()
-    # cur.execute(sql)
-    # conn.commit()
-    # conn.close()
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute(sql)
+    conn.commit()
+    conn.close()
 
 def ConnectDatabase():
     """
@@ -95,18 +101,16 @@ def OutputPackage(data, result, queryID):
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
+queryID, param, data = ConnectDatabase()
 
-# queryID, param, data = ConnectDatabase()
-
-print('Data reading...')
-data = pd.read_csv('./local_data.csv')
-print('Data loading...')
-with open("./parameterDemo1.json") as f:
-    param = json.load(f)
-queryID = "local_test_id"
-print(param)
-print(data.shape)
-
+# print('Data reading...')
+# data = pd.read_csv('./local_data.csv')
+# print('Data loading...')
+# with open("./parameterDemoNone.json") as f:
+#     param = json.load(f)
+# queryID = "local_test_id"
+# print(param)
+# print(data.shape)
 
 print("==============================================================")
 print('Parameters parsing...')
@@ -399,12 +403,14 @@ def SolveModel(prob, timeLimit, threadLimit):
     print("status:", prob.status)
     print("==============================================================")
     print('Time Cost', time.time() - start_time)
-
+    return prob
 try:
     prob, x = BuildModel()
-    prob = SolveModel(prob, timeLimit, threadLimit=4)
+    prob = SolveModel(prob, timeLimit, threadLimit)
 except Exception as e:
+    print(e)
     ReportStatus('Model Failed!', 'F', queryID)
+    exit(1)
 
 
 def ValidResult(result):
@@ -573,16 +579,8 @@ def ValidResult(result):
         resultStatus = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if statusType[i]:
-                if statusType[i] == 'ON':
-                    resultStatus[i] = sum(result*onHireStatus*basis[statusBasis])/sum(result*basis[statusBasis])
-                    print('\t OnHire is {0}'.format(round(resultStatus[i], 4)))
-                if statusType[i] == 'OF':
-                    resultStatus[i] = sum(result*offHireStatus*basis)/sum(result*basis)
-                    print('\t OffHire is {0}'.format(round(resultStatus[i], 4)))
-                if statusType[i] == 'None':
-                    resultStatus[i] = sum(result*noneHireStatus*basis)/sum(result*basis)
-                    print('\t NoneHire is {0}'.format(round(resultStatus[i], 4)))
-                
+                resultStatus[i] = sum(result*hireStatus[statusType[i]] *basis[statusBasis])/sum(result*basis[statusBasis])
+                print('\t Hire {0} is {1}'.format(statusType[i], round(resultStatus[i], 4)))
                 if statusGeq[i]:
                     if resultStatus[i] < statusLimit[i]:
                         print('\t \t >= failed')
@@ -618,6 +616,9 @@ def ValidResult(result):
         resultContract = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if contractLimit[i]:
+                print(result)
+                print(contract[i])
+                print(basis[contractBasis])
                 resultContract[i] = sum(result*contract[i]*basis[contractBasis])/sum(result*basis[contractBasis])
                 print("\t contract type {0} is {1}:".format(contractType[i], round(resultContract[i], 4))) 
                 if contractGeq[i]:
@@ -639,20 +640,21 @@ else:
     try:
         result = x.value
         print('Result is Valid:', len(set(result)) == 2)
-        result = np.where(result==1, 1, 0)
+        result = np.where(abs(result-1) < 1e-3, 1, 0) # x == 1
         print(int(sum(result)), '/', len(result), 'containers are selected.')
 
         if int(sum(result)) == 0:
             ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
         else:
             passed = ValidResult(result)
-            # OutputPackage(data, result, queryID)
+            OutputPackage(data, result, queryID)
             if passed:
                 ReportStatus('Algorithm Succeeded!', 'O', queryID)
             else:
                 ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
-        # print('Final Algorithm Status:', LpStatus[prob.status])
     except Exception as e:
+        print(e)
         ReportStatus('Validation Failed!', 'F', queryID)
+        exit(1)
 
 print('Total Time Cost:', time.time() - total_time)
