@@ -12,7 +12,7 @@ import cvxpy as cp
 import datetime
 
 numLimit = 5 # maximum num of constraints in each condition
-timeLimit = 500
+timeLimit = 800
 total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
@@ -25,12 +25,12 @@ def ReportStatus(msg, flag, queryID):
     sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
-    conn.autocommit = True
-    cur = conn.cursor()
-    cur.execute(sql)
-    conn.commit()
-    conn.close()
+    # conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    # conn.autocommit = True
+    # cur = conn.cursor()
+    # cur.execute(sql)
+    # conn.commit()
+    # conn.close()
 
 def ConnectDatabase():
     """
@@ -98,14 +98,14 @@ def OutputPackage(data, result, queryID):
 
 # queryID, param, data = ConnectDatabase()
 
-# print('Data reading...')
-# data = pd.read_csv('./local_data.csv')
-# print('Data loading...')
-# with open("./parameterDemo1.json") as f:
-#     param = json.load(f)
-# queryID = "local_test_id"
-# print(param)
-# print(data.shape)
+print('Data reading...')
+data = pd.read_csv('./local_data.csv')
+print('Data loading...')
+with open("./parameterDemo1.json") as f:
+    param = json.load(f)
+queryID = "local_test_id"
+print(param)
+print(data.shape)
 
 
 print("==============================================================")
@@ -389,23 +389,22 @@ def BuildModel():
     print('Time Cost', time.time() - start_time)
     return prob, x
 
-
-
-def SolveModel(prob, timeLimit):
+def SolveModel(prob, timeLimit, threadLimit):
     start_time = time.time()
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.CBC, verbose=True, maximumSeconds=timeLimit, numberThreads=4)
+    prob.solve(solver=cp.CBC, verbose=True, maximumSeconds=timeLimit, numberThreads=threadLimit)
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
     print('Time Cost', time.time() - start_time)
 
-
-prob, x = BuildModel()
-prob = SolveModel(prob, timeLimit)
-
+try:
+    prob, x = BuildModel()
+    prob = SolveModel(prob, timeLimit, threadLimit=4)
+except Exception as e:
+    ReportStatus('Model Failed!', 'F', queryID)
 
 
 def ValidResult(result):
@@ -522,9 +521,9 @@ def ValidResult(result):
         print('Top lessee:', lesseeBasis)
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         resultTop3Lessee = [
-            top3Lessee[0][1]/sum(result*basis[lesseeBasis]),
-            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis[lesseeBasis]),
-            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis[lesseeBasis])
+            top3Lessee[0][1]/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 1 else None,
+            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 2 else None,
+            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 3 else None
         ]
         if topLesseeLimit[0]:
             print('\t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
@@ -634,3 +633,26 @@ def ValidResult(result):
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
     return passed
 
+if prob.status == 'infeasible':
+    ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID)
+else:
+    try:
+        result = x.value
+        print('Result is Valid:', len(set(result)) == 2)
+        result = np.where(result==1, 1, 0)
+        print(int(sum(result)), '/', len(result), 'containers are selected.')
+
+        if int(sum(result)) == 0:
+            ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
+        else:
+            passed = ValidResult(result)
+            # OutputPackage(data, result, queryID)
+            if passed:
+                ReportStatus('Algorithm Succeeded!', 'O', queryID)
+            else:
+                ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
+        # print('Final Algorithm Status:', LpStatus[prob.status])
+    except Exception as e:
+        ReportStatus('Validation Failed!', 'F', queryID)
+
+print('Total Time Cost:', time.time() - total_time)
