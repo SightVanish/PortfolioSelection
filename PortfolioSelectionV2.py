@@ -106,7 +106,7 @@ queryID, param, data = ConnectDatabase()
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
 # print('Data loading...')
-# with open("./parameterDemoNone.json") as f:
+# with open("./parameterDemo1.json") as f:
 #     param = json.load(f)
 # queryID = "local_test_id"
 # print(param)
@@ -115,6 +115,8 @@ queryID, param, data = ConnectDatabase()
 print("==============================================================")
 print('Parameters parsing...')
 try:
+    timeLimit = param['timeLimit']
+    print('time limit:', timeLimit)
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
 
@@ -661,3 +663,4 @@ else:
         exit(1)
 
 print('Total Time Cost:', time.time() - total_time)
+

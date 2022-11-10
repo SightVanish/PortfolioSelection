@@ -3,6 +3,7 @@
         "nbvorCost": 1,
         "maxOrMin": 1
     },
+    "timeLimit": 100,
     "totalNBVFrom": 125000000,
     "totalNBVTo":   150000000,
     "totalCostFrom": "",
