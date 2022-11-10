@@ -106,7 +106,7 @@ queryID, param, data = ConnectDatabase()
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
 # print('Data loading...')
-# with open("./parameterDemo1.json") as f:
+# with open("./parameterDemo2.json") as f:
 #     param = json.load(f)
 # queryID = "local_test_id"
 # print(param)
@@ -115,7 +115,8 @@ queryID, param, data = ConnectDatabase()
 print("==============================================================")
 print('Parameters parsing...')
 try:
-    timeLimit = param['timeLimit']
+    if 'timeLimit' in param:
+        timeLimit = param['timeLimit']
     print('time limit:', timeLimit)
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
@@ -337,17 +338,16 @@ def BuildModel():
     if lesseeBasis:
         for i in range(numLimit):
             if lesseeLimit[i]:
-                if lesseeType[i] in lesseeOneHot:
-                    print('Set Lessee Limit', i)
-                    if lesseeGeq[i]:
-                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >= \
-                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
-                    else:
-                        constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
-                            lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                if lesseeType[i] not in lesseeOneHot:
+                    lesseeOneHot[lesseeType[i]] = np.zeros(data.shape[0])
+                print('Set Lessee Limit', i)
+                if lesseeGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >= \
+                        lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
                 else:
-                    print('Cannot Find', lesseeType[i])
-        # top1
+                    constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
+                        lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+        # top lessee
         for i in range(3):
             if topLesseeLimit[i]:
                 print('Set Top', i+1)
@@ -358,7 +358,7 @@ def BuildModel():
                 else:
                     constraints.append(cp.sum_largest( \
                         cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <= \
-                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))  
+                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
     # status
     if statusBasis:
         for i in range(numLimit):
@@ -374,7 +374,7 @@ def BuildModel():
     if productBasis:
         for i in range(numLimit):
             if productLimit[i]:
-                print('Set Produdct Limit', i)
+                print('Set Product Limit', i)
                 if productGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) >= \
                         productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
@@ -513,71 +513,40 @@ def ValidResult(result):
         resultLessee = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if lesseeLimit[i]:
-                if lesseeType[i] in lesseeOneHot:
-                    resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
-                    print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
-                    if lesseeGeq[i]:
-                        if resultLessee[i] < lesseeLimit[i]:
-                            print('\t \t >= failed')
-                            passed = False
-                    else:
-                        if resultLessee[i] > lesseeLimit[i]:
-                            print('\t \t <= failed')
-                            passed = False
-                    if passed:
-                        print('\t \t passed')
+                resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
+                print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
+                if lesseeGeq[i]:
+                    if resultLessee[i] < lesseeLimit[i]:
+                        print('\t \t >= failed')
+                        passed = False
                 else:
-                    print('Can not find {0}'.format(lesseeType[i]))
+                    if resultLessee[i] > lesseeLimit[i]:
+                        print('\t \t <= failed')
+                        passed = False
+                if passed:
+                    print('\t \t passed')
+
 
         print('Top lessee:', lesseeBasis)
         top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         resultTop3Lessee = [
-            top3Lessee[0][1]/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 1 else None,
-            (top3Lessee[0][1]+top3Lessee[1][1])/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 2 else None,
-            (top3Lessee[0][1]+top3Lessee[1][1]+top3Lessee[2][1])/sum(result*basis[lesseeBasis]) if len(top3Lessee) >= 3 else None
+            sum(i[1] for i in top3Lessee[:1]) / sum(result*basis[lesseeBasis]),
+            sum(i[1] for i in top3Lessee[:2]) / sum(result*basis[lesseeBasis]),
+            sum(i[1] for i in top3Lessee[:3]) / sum(result*basis[lesseeBasis])
         ]
-        if topLesseeLimit[0]:
-            print('\t top 1 {0} is {1}'.format(top3Lessee[0][0], round(resultTop3Lessee[0], 4)))
-            if topLesseeGeq[0]:
-                if resultTop3Lessee[0] < topLesseeLimit[0]:
-                    print('\t \t >= failed')
-                    passed = False
-            else:
-                if resultTop3Lessee[0] > topLesseeLimit[0]:
-                    print('\t \t <= failed')
-                    passed = False
-            if passed:
-                print('\t \t passed')
-        if topLesseeLimit[1]:
-            if len(top3Lessee) >= 2:
-                print('\t top 2 {0} {1} is {2}'.format(top3Lessee[0][0], top3Lessee[1][0], round(resultTop3Lessee[1], 4)))
-                if topLesseeGeq[1]:
-                    if resultTop3Lessee[1] < topLesseeLimit[1]:
+        for i in range(3):
+            if topLesseeLimit[i]:
+                print('\t top {0} {1} is {2}'.format(i+1, [i[0] for i in top3Lessee[:i+1]], round(resultTop3Lessee[i], 4)))
+                if topLesseeGeq[i]:
+                    if resultTop3Lessee[i] < topLesseeLimit[i]:
                         print('\t \t >= failed')
                         passed = False
-                    else:
-                        if resultTop3Lessee[1] > topLesseeLimit[1]:
-                            print('\t \t <= failed')
-                            passed = False
-                if passed:
-                    print('\t \t passed')
-            else:
-                print('\t Only one lessee.')
-        if topLesseeLimit[2]:
-            if len(top3Lessee) >= 3:
-                print('\t top 3 {0} {1} {2} is {3}'.format(top3Lessee[0][0], top3Lessee[1][0], top3Lessee[2][0], round(resultTop3Lessee[2], 4)))
-                if topLesseeGeq[2]:
-                    if resultTop3Lessee[2] < topLesseeLimit[2]:
-                        print('\t \t >= failed')
+                else:
+                    if resultTop3Lessee[i] > topLesseeLimit[i]:
+                        print('\t \t <= failed')
                         passed = False
-                    else:
-                        if resultTop3Lessee[2] > topLesseeLimit[2]:
-                            print('\t \t <= failed')
-                            passed = False
                 if passed:
                     print('\t \t passed')
-            else:
-                print('\t Only two lessee.')
         
     print('billing status:', statusBasis)
     if statusBasis:
