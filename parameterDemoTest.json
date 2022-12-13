@@ -1,0 +1,95 @@
+{
+    "prefer": {
+        "nbvorCost": 1,
+        "maxOrMin": 1
+    },
+    "timeLimit": 300,
+    "totalNBVFrom": 1000,
+    "totalNBVTo": "",
+    "totalCostFrom": "",
+    "totalCostTo": "",
+    "totalRentFrom": "",
+    "containersAge": {
+        "average": {
+            "symbol": 0,
+            "averageContainersAge": 0
+        },
+        "basis": "",
+        "list": [
+        ]
+    },
+    "weightedAge": {
+        "average": {
+            "symbol": 0,
+            "averageWeighedAge": 0
+        },
+        "basis": "",
+        "list": [
+
+        ]
+    },
+    "lessee": {
+        "basis": "ceu",
+        "topLessee": {
+            "top3": {
+                "symbol": 0,
+                "percent": 60
+            },
+            "top1": {
+                "symbol": 0,
+                "percent": 0
+            },
+            "top2": {
+                "symbol": 0,
+                "percent": 0
+            }
+        },
+        "others": {
+            "lessee": [],
+            "percent": 30
+        },
+        "list": [
+        ]
+    },
+    "status": {
+        "basis": "teu",
+        "list": [
+            {
+                "statusType":"ON",
+                "symbol": 1,
+                "percent": 90
+            },
+            {
+                "statusType":"OF",
+                "symbol": 0,
+                "percent": 10
+            },
+            {
+                "statusType":"None",
+                "symbol": 0,
+                "percent": 10
+            }
+        ]
+    },
+    "product": {
+        "basis": "",
+        "list": [
+        ]
+    },
+    "contractType": {
+        "basis": "",
+        "list": [
+        ]
+    },
+    "rml":{
+        "basis": "",
+        "list":[
+            {
+                "rmlFrom": 1,
+                "rmlTo": "",
+                "symbol": 1,
+                "percent": 50
+            }
+        ]
+    }
+}

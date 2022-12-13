@@ -10,19 +10,32 @@ import sys
 import uuid
 import cvxpy as cp
 import datetime
+import argparse
 """
 Check before submit
-1. enable ReportStatus
-2. enable OutputPackage
-3. disable reading local data
+1. enable queryID test
+2. switch database 
+3. bug free
 """
-numLimit = 5 # maximum num of constraints in each condition
-timeLimit = 600
-threadLimit = 4
+INF = float('inf')
 total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
+
+parser = argparse.ArgumentParser(description="Flornes porfolio selection model")
+parser.add_argument('--queryID', '-id', type=str, help='Query ID')
+parser.add_argument('--numLimit', '-n', type=int, default=5, help='Maximum number of constraints in each condition')
+parser.add_argument('--threadLimit', '-t', type=int, default=4, help='Maximum number of threads')
+args = parser.parse_args().__dict__
+numLimit = args['numLimit']
+threadLimit = args['threadLimit']
+queryID = args['queryID']
+print('Input argparse',  args)
+
+if queryID is None:
+    print("No valid query id!")
+    exit(1)
 
 def ReportStatus(msg, flag, queryID):
     """
@@ -42,9 +55,10 @@ def ConnectDatabase():
     """
     Load parameters in JSON from biz_model.biz_fir_query_parameter_definition and load data from biz_model.biz_ads_fir_pkg_data.
     """
+    start_time = time.time()
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json, id from biz_model.biz_fir_query_parameter_definition where success_flag='T'"
+        sqlParameter = "select python_json, id from biz_model.biz_fir_query_parameter_definition where id='Bd9fLsUxCLP4bciVBmeZHM'"
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
@@ -76,11 +90,13 @@ def ConnectDatabase():
         print(e)
         ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
         exit(1)
-
+    print('Time Cost: ', time.time() - start_time)
     return queryID, param, data
 
 def TestData(queryID):
+    start_time = time.time()
     try:
+        
         print('Parameters reading...')
         sqlParameter = "select python_json, id from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
@@ -114,7 +130,7 @@ def TestData(queryID):
         print(e)
         ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
         exit(1)
-
+    print('Time Cost: ', time.time() - start_time)
     return queryID, param, data
 
 def OutputPackage(data, result, queryID):
@@ -123,6 +139,7 @@ def OutputPackage(data, result, queryID):
     """
     sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
     try:
+        start_time = time.time()
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         conn.autocommit = True
         cur = conn.cursor()
@@ -134,40 +151,40 @@ def OutputPackage(data, result, queryID):
         psycopg2.extras.execute_values(cur, sqlOutput, values_list)
         conn.commit()
         conn.close()
+        print('Time Cost: ', time.time() - start_time)
     except Exception as e:
         print(e) 
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
-# queryID, param, data = ConnectDatabase()
-queryID = '8E1JnYCtNMxXNvjPhFBq8y'
+queryID, param, data = ConnectDatabase()
+queryID = 'VEW7rCfpNeFVHaw9pFpa6G'
 queryID, param, data = TestData(queryID)
 
+exit(1)
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
-# print('Data loading...')
-# with open("./parameterDemo2.json") as f:
+# print('Parameter loading...')
+# with open("./parameterDemoAll.json") as f:
 #     param = json.load(f)
 # queryID = "local_test_id"
+# print("==============================================================")
 # print(param)
 # print(data.shape)
 
 print("==============================================================")
 print('Parameters parsing...')
 try:
-    if 'timeLimit' in param:
-        timeLimit = param['timeLimit']
-    # timeLimit = 1000
-    print('time limit:', timeLimit)
+    timeLimit = param['timeLimit'] if param['timeLimit'] > 0 else 600
+    print('model time limit:', timeLimit)
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
-
-    fleetAgeLowBound = [None for _ in range(numLimit)]
-    fleetAgeUpBound = [None for _ in range(numLimit)]
+    fleetAgeLowBound = [-INF for _ in range(numLimit)]
+    fleetAgeUpBound = [INF for _ in range(numLimit)]
     fleetAgeLimit = [None for _ in range(numLimit)]
     fleetAgeGeq = [None for _ in range(numLimit)]
-    weightedAgeLowBound = [None for _ in range(numLimit)]
-    weightedAgeUpBound = [None for _ in range(numLimit)]
+    weightedAgeLowBound = [-INF for _ in range(numLimit)]
+    weightedAgeUpBound = [INF for _ in range(numLimit)]
     weightedAgeLimit = [None for _ in range(numLimit)]
     weightedAgeGeq = [None for _ in range(numLimit)]
     lesseeType = [None for _ in range(numLimit)]
@@ -182,12 +199,21 @@ try:
     statusType = [None for _ in range(numLimit)]
     statusLimit = [None for _ in range(numLimit)]
     statusGeq = [None for _ in range(numLimit)]
+    rmlLowBound = [-INF for _ in range(numLimit)]
+    rmlUpBound = [INF for _ in range(numLimit)]
+    rmlGeq = [None for _ in range(numLimit)]
+    rmlLimit = [None for _ in range(numLimit)]
 
     minTotalNbv = param['totalNBVFrom']
     maxTotalNbv = param['totalNBVTo']
 
     minTotalCost = param['totalCostFrom']
     maxTotalCost = param['totalCostTo']
+
+    minTotalRent = param['totalRentFrom']
+
+    lesseeOthers = param['lessee']['others']['lessee']
+    lesseeOthersLimit = param['lessee']['others']['percent'] / 100
 
     topLesseeLimit = [
         param['lessee']['topLessee']['top1']['percent'] / 100,
@@ -197,6 +223,7 @@ try:
         param['lessee']['topLessee']['top1']['symbol'],
         param['lessee']['topLessee']['top2']['symbol'],
         param['lessee']['topLessee']['top3']['symbol']]
+
     fleetAgeAvgLimit = param['containersAge']['average']['averageContainersAge']
     fleetAgeAvgGeq = param['containersAge']['average']['symbol']
     fleetAgeBasis = param['containersAge']['basis']
@@ -238,12 +265,19 @@ try:
         contractType[i] = param['contractType']['list'][i]['contractType']
         contractLimit[i] = param['contractType']['list'][i]['percent'] / 100
         contractGeq[i] = param['contractType']['list'][i]['symbol']
+
+    rmlBasis = param['rml']['basis']
+    for i in range(len(param['rml']['list'])):
+        rmlLowBound[i] = param['rml']['list'][i]['rmlFrom']
+        rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
+        rmlGeq[i] = param['rml']['list'][i]['symbol']
+        rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
+
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
-
 print("==============================================================")
 print('Data processing...')
 try:
@@ -251,7 +285,7 @@ try:
     data['OnHireStatus'] = data['billing'].apply(lambda x: 1 if x=='ON' else 0)
     data['OffHireStatus'] = data['billing'].apply(lambda x: 1 if x=='OF' else 0)
     data['NoneStatus'] = data['billing'].apply(lambda x: 1 if (x!='ON' and x!='OF') else 0)
-    # ONE HOT -- all lessee
+    # One hot all lessees
     for lesseeName in data['customer'].value_counts().index:
         data[lesseeName] = data['customer'].apply(lambda x: 1 if x==lesseeName else 0)
     for i in range(numLimit):
@@ -271,12 +305,17 @@ try:
         if contractLimit[i]:
             column_name = 'ContractType{0}'.format(i)
             data[column_name] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
-
+        # RML
+        if rmlLimit[i]:
+            column_name = 'RML{0}'.format(i)
+            data[column_name] = data['rml'].apply(lambda x: 1 if rmlLowBound[i]<=x<=rmlUpBound[i] else 0)
+    
     # convert data to numpy
     nbv = data['nbv'].to_numpy()
     cost = data['cost'].to_numpy()
     ceu = data['ceu'].to_numpy()
     teu = data['teu'].to_numpy()
+    rent = data['rent'].to_numpy()
     fleetAgeAvg = data['fleet_year'].to_numpy()
     weightedAgeAvg = data['weighted_age'].to_numpy()
     onHireStatus = data['OnHireStatus'].to_numpy()
@@ -287,11 +326,13 @@ try:
     weightedAge = []
     product = []
     contract = []
+    rml = []
     for i in range(numLimit):
         fleetAge.append(data['FleetAge{0}'.format(i)].to_numpy() if fleetAgeLimit[i] else None)
         weightedAge.append(data['WeightedAge{0}'.format(i)].to_numpy() if weightedAgeLimit[i] else None)
         product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
         contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
+        rml.append(data['RML{0}'.format(i)].to_numpy() if rmlLimit[i] else None)
     basis = {}
     basis['nbv'] = nbv
     basis['ceu'] = ceu
@@ -339,6 +380,9 @@ def BuildModel():
     if minTotalCost:
         constraints.append(cp.sum(cp.multiply(x, cost)) >= minTotalCost)
         print('Set Min Cost')
+    # rent
+    if minTotalRent:
+        constraints.append(cp.sum(cp.multiply(x, rent)) >= minTotalRent)
     # container age
     if fleetAgeAvgLimit:
         print('Set Container Average Age Limit')
@@ -388,18 +432,36 @@ def BuildModel():
                 else:
                     constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <= \
                         lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+        maxTop = 0
         # top lessee
         for i in range(3):
             if topLesseeLimit[i]:
+                maxTop = i+1
                 print('Set Top', i+1)
                 if topLesseeGeq[i]:
                     constraints.append(cp.sum_largest( \
                         cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) >= \
-                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                            topLesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
                 else:
                     constraints.append(cp.sum_largest( \
                         cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <= \
-                            topLesseeLimit[0] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                            topLesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+        # others
+        if lesseeOthersLimit:
+            if lesseeOthers:
+                print('Set Other Lessees via List')
+                # add constraints according to user input
+                constraints.append(cp.sum_largest( \
+                    cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), 1) <= \
+                        lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+            else:
+                # find max top limit
+                print('Max Top:', maxTop)
+                constraints.append(
+                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), maxTop + 1) - \
+                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), maxTop) <= \
+                        lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+        
     # status
     if statusBasis:
         for i in range(numLimit):
@@ -433,6 +495,17 @@ def BuildModel():
                 else:
                     constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) <= \
                         contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
+    # rml
+    if rmlBasis:
+        for i in range(numLimit):
+            if rmlLimit[i]:
+                print('Set RML limit', i)
+                if rmlGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, rml[i] * basis[rmlBasis])) >= \
+                        rmlLimit[i] * cp.sum(cp.multiply(x, basis[rmlBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, rml[i] * basis[rmlBasis])) <= \
+                        rmlLimit[i] * cp.sum(cp.multiply(x, basis[rmlBasis])))
     
     prob = cp.Problem(objective, constraints)
     print('Time Cost', time.time() - start_time)
@@ -472,8 +545,6 @@ def ValidResult(result):
         if (minTotalNbv - resultNbv) > 0.1: 
             passed = False
             print('\t min failed')
-    if (maxTotalNbv or minTotalNbv) and passed:
-        print('\t passed')
     resultCost = sum(result*cost)
     print("cost: {0}".format(round(resultCost, 4)))
     if maxTotalCost:
@@ -484,166 +555,169 @@ def ValidResult(result):
         if (minTotalCost - resultCost) > 0.1:
             passed = False
             print('\t min failed')
-    if (maxTotalCost or minTotalCost) and passed:
-        print('\t passed')
+    resultRent = sum(result*rent)
+    print("rent: {0}".format(round(resultRent, 4)))
+    if minTotalRent:
+        if (minTotalCost - resultRent) > 0.1:
+            passed = False
+            print('\t min failed')
 
-    print("container age:", fleetAgeBasis)
     if fleetAgeAvgLimit:
         resultFleetAgeAvg = sum(result*fleetAgeAvg)/sum(result)
-        print('\t container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
+        print('container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
         if fleetAgeAvgGeq:
             if resultFleetAgeAvg < fleetAgeAvgLimit:
                 passed = False
-                print('\t \t >= failed')
+                print('\t >= failed')
         else:
             if resultFleetAgeAvg > fleetAgeAvgLimit:
                 passed = False
-                print('\t \t <= failed')
-        if passed:
-            print('\t \t passed')
+                print('\t <= failed')
+
     if fleetAgeBasis:
-        resultFleetAge = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if fleetAgeLimit[i]:
-                resultFleetAge[i] = sum(result*fleetAge[i]*basis[fleetAgeBasis])/sum(result*basis[fleetAgeBasis])
-                print("\t container age from {0} to {1}: {2}".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(resultFleetAge[i], 4)))
+                resultFleetAge = sum(result*fleetAge[i]*basis[fleetAgeBasis])/sum(result*basis[fleetAgeBasis])
+                print("container age from {0} to {1} is {2}".format(fleetAgeLowBound[i], fleetAgeUpBound[i], round(resultFleetAge, 4)))
                 if fleetAgeGeq[i]:
-                    if resultFleetAge[i] < fleetAgeLimit[i]:
+                    if resultFleetAge < fleetAgeLimit[i]:
                         passed = False
-                        print('\t \t >= failed')
+                        print('\t >= failed')
                 else:
-                    if resultFleetAge[i] > fleetAgeLimit[i]:
+                    if resultFleetAge > fleetAgeLimit[i]:
                         passed = False
-                        print('\t \t <= failed')
-                if passed:
-                    print('\t \t passed')
+                        print('\t <= failed')
 
-    print("weighted age:", weightedAgeBasis)
     if weightedAgeAvgLimit:
         resultWeightedAgeAvg = sum(result*weightedAgeAvg)/sum(result*ceu)
-        print('\t weighted average age is {0}'.format(round(resultWeightedAgeAvg, 4)))
+        print('weighted average age is {0}'.format(round(resultWeightedAgeAvg, 4)))
         if weightedAgeAvgGeq:
             if resultWeightedAgeAvg < weightedAgeAvgLimit:
-                print('\t \t >= failed')
+                print('\t >= failed')
                 passed = False
         else:
             if resultWeightedAgeAvg > weightedAgeAvgLimit:
-                print('\t \t <= failed')
+                print('\t <= failed')
                 passed = False
-        if passed:
-            print('\t \t passed')
+
     if weightedAgeBasis:
-        resultWeightedAge = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if weightedAgeLimit[i]:
-                resultWeightedAge[i] = sum(result*weightedAge[i]*basis[weightedAgeBasis])/sum(result*basis[weightedAgeBasis])
-                print("\t weighted age from {0} to {1} is {2}".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(resultWeightedAge[i], 4)))
+                resultWeightedAge = sum(result*weightedAge[i]*basis[weightedAgeBasis])/sum(result*basis[weightedAgeBasis])
+                print("weighted age from {0} to {1} is {2}".format(weightedAgeLowBound[i], weightedAgeUpBound[i], round(resultWeightedAge, 4)))
                 if weightedAgeGeq[i]:
-                    if resultWeightedAge[i] < weightedAgeLimit[i]:
-                        print('\t \t >= failed')
+                    if resultWeightedAge < weightedAgeLimit[i]:
+                        print('\t >= failed')
                         passed = False
                 else:
-                    if resultWeightedAge[i] > weightedAgeLimit[i]:
-                        print('\t \t <= failed')
+                    if resultWeightedAge > weightedAgeLimit[i]:
+                        print('\t <= failed')
                         passed = False
-                if passed:
-                    print('\t \t passed')
 
     if lesseeBasis:
-        print('Certain Lessee:', lesseeBasis)
-        resultLessee = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if lesseeLimit[i]:
-                resultLessee[i] = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
-                print("\t lessee {0} is {1}:".format(lesseeType[i], round(resultLessee[i], 4)))
+                resultLessee = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
+                print("lessee {0} is {1}".format(lesseeType[i], round(resultLessee, 4)))
                 if lesseeGeq[i]:
-                    if resultLessee[i] < lesseeLimit[i]:
-                        print('\t \t >= failed')
+                    if resultLessee < lesseeLimit[i]:
+                        print('\t >= failed')
                         passed = False
                 else:
-                    if resultLessee[i] > lesseeLimit[i]:
-                        print('\t \t <= failed')
+                    if resultLessee > lesseeLimit[i]:
+                        print('\t <= failed')
                         passed = False
-                if passed:
-                    print('\t \t passed')
 
-
-        print('Top lessee:', lesseeBasis)
-        top3Lessee = heapq.nlargest(3, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
+        top4Lessee = heapq.nlargest(4, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
         resultTop3Lessee = [
-            sum(i[1] for i in top3Lessee[:1]) / sum(result*basis[lesseeBasis]),
-            sum(i[1] for i in top3Lessee[:2]) / sum(result*basis[lesseeBasis]),
-            sum(i[1] for i in top3Lessee[:3]) / sum(result*basis[lesseeBasis])
+            sum(i[1] for i in top4Lessee[:1]) / sum(result*basis[lesseeBasis]),
+            sum(i[1] for i in top4Lessee[:2]) / sum(result*basis[lesseeBasis]),
+            sum(i[1] for i in top4Lessee[:3]) / sum(result*basis[lesseeBasis])
         ]
         for i in range(3):
             if topLesseeLimit[i]:
-                print('\t top {0} {1} is {2}'.format(i+1, [i[0] for i in top3Lessee[:i+1]], round(resultTop3Lessee[i], 4)))
+                print('top {0} {1} is {2}'.format(i+1, [i[0] for i in top4Lessee[:i+1]], round(resultTop3Lessee[i], 4)))
                 if topLesseeGeq[i]:
                     if resultTop3Lessee[i] < topLesseeLimit[i]:
-                        print('\t \t >= failed')
+                        print('\t >= failed')
                         passed = False
                 else:
                     if resultTop3Lessee[i] > topLesseeLimit[i]:
-                        print('\t \t <= failed')
+                        print('\t <= failed')
                         passed = False
-                if passed:
-                    print('\t \t passed')
-        
-    print('billing status:', statusBasis)
+        # others
+        if lesseeOthersLimit:
+            if lesseeOthers:
+                print('Other lessees via list')
+                otherLessees = [sum(result*lesseeOneHot[l]*basis[lesseeBasis]) for l in lesseeOthers]
+                print('\t top others is {0}'.format(round(max(otherLessees), 4)))
+                if max(otherLessees) > lesseeOthersLimit:
+                    print('\t \t failed')
+                    passed = False
+            else:
+                print('Other lesees')
+                maxTop = 0
+                for i in range(3):
+                    if topLesseeLimit[i]:
+                        maxTop = i+1
+                print('\t top others is {0}'.format(round(top4Lessee[maxTop], 4)))
+                if top4Lessee[maxTop] > lesseeOthersLimit:
+                    print('\t \t failed')
+                    passed = False
+
     if statusBasis:
-        resultStatus = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if statusType[i]:
-                resultStatus[i] = sum(result*hireStatus[statusType[i]] *basis[statusBasis])/sum(result*basis[statusBasis])
-                print('\t Hire {0} is {1}'.format(statusType[i], round(resultStatus[i], 4)))
+                resultStatus = sum(result*hireStatus[statusType[i]] *basis[statusBasis])/sum(result*basis[statusBasis])
+                print('Hire {0} is {1}'.format(statusType[i], round(resultStatus, 4)))
                 if statusGeq[i]:
-                    if resultStatus[i] < statusLimit[i]:
-                        print('\t \t >= failed')
+                    if resultStatus < statusLimit[i]:
+                        print('\t >= failed')
                         passed = False
                 else:
-                    if resultStatus[i] > statusLimit[i]:
-                        print('\t \t <= failed')
+                    if resultStatus > statusLimit[i]:
+                        print('\t <= failed')
                         passed = False
-                if passed:
-                    print('\t \t passed')
 
-    print("product:", productBasis)
     if productBasis:
-        resultProduct = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if productLimit[i]:
-                resultProduct[i] = sum(result*product[i]*basis[productBasis])/sum(result*basis[productBasis])
-                print("\t product {0} is {1}:".format(productType[i], round(resultProduct[i], 4)))
+                resultProduct = sum(result*product[i]*basis[productBasis])/sum(result*basis[productBasis])
+                print("product {0} is {1}".format(productType[i], round(resultProduct, 4)))
                 if productGeq[i]:
-                    if resultProduct[i] < productLimit[i]:
-                        print('\t \t >= failed')
+                    if resultProduct < productLimit[i]:
+                        print('\t >= failed')
                         passed = False
                 else:
-                    if resultProduct[i] > productLimit[i]:
-                        print('\t \t <= failed')
+                    if resultProduct > productLimit[i]:
+                        print('\t <= failed')
                         passed = False
-                if passed:
-                    print('\t \t passed')
 
-
-    print("contract type:", contractBasis)
     if contractBasis:
-        resultContract = [None for _ in range(numLimit)]
         for i in range(numLimit):
             if contractLimit[i]:
-                print(result)
-                print(contract[i])
-                print(basis[contractBasis])
-                resultContract[i] = sum(result*contract[i]*basis[contractBasis])/sum(result*basis[contractBasis])
-                print("\t contract type {0} is {1}:".format(contractType[i], round(resultContract[i], 4))) 
+                resultContract = sum(result*contract[i]*basis[contractBasis])/sum(result*basis[contractBasis])
+                print("contract type {0} is {1}".format(contractType[i], round(resultContract, 4))) 
                 if contractGeq[i]:
-                    if resultContract[i] < contractLimit[i]:
-                        print('\t \t >= failed')
+                    if resultContract < contractLimit[i]:
+                        print('\t >= failed')
+                        passed = False
                 else:
-                    if resultContract[i] > contractLimit[i]:
-                        print('\t \t <= failed')
-                if passed:
-                    print('\t \t passed')
+                    if resultContract > contractLimit[i]:
+                        print('\t <= failed')
+                        passed = False
+    if rmlBasis:
+        for i in range(numLimit):
+            resultRML = sum(result*rml[i]*basis[rmlBasis])/sum(result*basis[rmlBasis])
+            print("rml from {0} to {1} is {2}".format(rmlLowBound[i], rmlUpBound[i], round(resultRML, 4)))
+            if rmlGeq[i]:
+                if resultRML < rmlLimit[i]:
+                    print('\t >= failed')
+                    passed = False
+            else:
+                if resultRML > rmlLimit[i]:
+                    print('\t <= failed')
+                    passed = False
 
     if passed:
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')

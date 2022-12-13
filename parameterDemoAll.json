@@ -3,10 +3,12 @@
         "nbvorCost": 0,
         "maxOrMin": 0
     },
+    "timeLimit": 300,
     "totalNBVFrom": 10000000,
     "totalNBVTo": 30000000,
     "totalCostFrom": 10000000,
     "totalCostTo": "",
+    "totalRentFrom": 100000,
     "containersAge": {
         "average": {
             "symbol": 0,
@@ -53,6 +55,10 @@
                 "symbol": 0,
                 "percent": 0
             }
+        },
+        "others": {
+            "lessee": [],
+            "percent": 10
         },
         "list": [
             {
@@ -104,6 +110,17 @@
                 "contractType": ["LF", "LP"],
                 "symbol": 0,
                 "percent": 100
+            }
+        ]
+    },
+    "rml":{
+        "basis": "",
+        "list":[
+            {
+                "rmlFrom": 1,
+                "rmlTo": "",
+                "symbol": 1,
+                "percent": 50
             }
         ]
     }
