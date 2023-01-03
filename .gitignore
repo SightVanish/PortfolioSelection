@@ -4,10 +4,6 @@ prepared_data_demo.csv
 Trace Plot.svg
 problem.lp
 demo_result.csv
-pulp_test.py
 __pycache__/
-database_test.py
-post_test.py
-output_test.py
 demo_result.xlsb
 multithreading.py
