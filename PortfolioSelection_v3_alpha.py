@@ -19,11 +19,12 @@ Check before submit
 """
 INF = float('inf')
 total_time = time.time()
+local = False # use local file or not
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
-parser = argparse.ArgumentParser(description="Flornes porfolio selection model")
+parser = argparse.ArgumentParser(description="This is Flornes Porfolio Selection Model.")
 parser.add_argument('--queryID', '-id', type=str, help='Query ID')
 parser.add_argument('--numLimit', '-n', type=int, default=5, help='Maximum number of constraints in each condition')
 parser.add_argument('--threadLimit', '-t', type=int, default=4, help='Maximum number of threads')
@@ -55,6 +56,7 @@ def ConnectDatabase(queryID):
     """
     Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
     """
+    # load parameters
     try:
         print('Parameters reading...')
         sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
@@ -69,6 +71,8 @@ def ConnectDatabase(queryID):
     except Exception as e:
         print("Loading Parameters from GreenPlum Failed!\n", e)
         exit(1)
+    
+    # load data
     try:
         print('Data loading...')
         sqlInput = """
@@ -110,17 +114,21 @@ def OutputPackage(data, result, queryID):
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
-param, data = ConnectDatabase(queryID)
 
-# print('Data reading...')
-# data = pd.read_csv('./local_data.csv')
-# print('Parameter loading...')
-# with open("./parameterDemoTest.json") as f:
-#     param = json.load(f)
-# queryID = "local_test_id"
-# print("==============================================================")
-# print(param)
-# print(data.shape)
+
+if local:
+    print('Data reading...')
+    data = pd.read_csv('./local_data.csv')
+    print('Parameter loading...')
+    with open("./parameterDemoTest.json") as f:
+        param = json.load(f)
+    queryID = "local_test_id"
+    print("==============================================================")
+    print(param)
+    print(data.shape)
+else:
+    param, data = ConnectDatabase(queryID)
+
 print("==============================================================")
 print('Parameters parsing...')
 try:
@@ -221,12 +229,13 @@ try:
         # rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
         rmlGeq[i] = param['rml']['list'][i]['symbol']
         rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
-
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
+
+
 print("==============================================================")
 print('Data processing...')
 try:
@@ -270,6 +279,10 @@ try:
     onHireStatus = data['OnHireStatus'].to_numpy()
     offHireStatus = data['OffHireStatus'].to_numpy()
     noneHireStatus = data['NoneStatus'].to_numpy()
+    hireStatus = {}
+    hireStatus['ON'] = onHireStatus
+    hireStatus['OF'] = offHireStatus
+    hireStatus['None'] = noneHireStatus 
     lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
     fleetAge = []
     weightedAge = []
@@ -287,15 +300,13 @@ try:
     basis['ceu'] = ceu
     basis['teu'] = teu
     basis['cost'] = cost
-    hireStatus = {}
-    hireStatus['ON'] = onHireStatus
-    hireStatus['OF'] = offHireStatus
-    hireStatus['None'] = noneHireStatus 
 except Exception as e:
     print(e)
     msg = 'Processing Data Failed!' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
+
+
 def BuildModel():
     print("==============================================================")
     print('Model preparing...')
