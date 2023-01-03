@@ -33,114 +33,65 @@ threadLimit = args['threadLimit']
 queryID = args['queryID']
 print('Input argparse',  args)
 
-if queryID is None:
-    print("No valid query id!")
-    exit(1)
 
 def ReportStatus(msg, flag, queryID):
     """
-    Print message and update status in biz_model.biz_fir_query_parameter_definition.
+    Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
     """
-    sql = "update biz_model.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(sql)
     conn.commit()
     conn.close()
 
-def ConnectDatabase():
+def ConnectDatabase(queryID):
     """
-    Load parameters in JSON from biz_model.biz_fir_query_parameter_definition and load data from biz_model.biz_ads_fir_pkg_data.
+    Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
     """
-    start_time = time.time()
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json, id from biz_model.biz_fir_query_parameter_definition where id='Bd9fLsUxCLP4bciVBmeZHM'"
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
+        sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
             raise Exception("No Valid Query Request is Found!")
         elif paramInput.shape[0] > 1:
             raise Exception("More than One Valid Query Requests are Found!")
-        queryID = paramInput['id'][0]
         param = json.loads(paramInput['python_json'][0])
+        print(param)
     except Exception as e:
         print("Loading Parameters from GreenPlum Failed!\n", e)
         exit(1)
-
     try:
         print('Data loading...')
-        print('Query ID:', queryID)
         sqlInput = """
             select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
-            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
-            from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
+            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+            from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
         """.format(queryID) 
         data = pd.read_sql(sqlInput, conn)
-
         if data.shape[0] == 0:
             raise Exception("No Data Available!")
         print('Input data shape:', data.shape)
-        print(param)
         conn.close()
     except Exception as e:
         print(e)
         ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
         exit(1)
-    print('Time Cost: ', time.time() - start_time)
-    return queryID, param, data
 
-def TestData(queryID):
-    start_time = time.time()
-    try:
-        
-        print('Parameters reading...')
-        sqlParameter = "select python_json, id from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
-        paramInput = pd.read_sql(sqlParameter, conn)
-        if paramInput.shape[0] == 0:
-            raise Exception("No Valid Query Request is Found!")
-        elif paramInput.shape[0] > 1:
-            raise Exception("More than One Valid Query Requests are Found!")
-        queryID = paramInput['id'][0]
-        param = json.loads(paramInput['python_json'][0])
-    except Exception as e:
-        print("Loading Parameters from GreenPlum Failed!\n", e)
-        exit(1)
-
-    try:
-        print('Data loading...')
-        print('Query ID:', queryID)
-        sqlInput = """
-            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
-            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu
-            from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        """.format(queryID) 
-        data = pd.read_sql(sqlInput, conn)
-
-        if data.shape[0] == 0:
-            raise Exception("No Data Available!")
-        print('Input data shape:', data.shape)
-        print(param)
-        conn.close()
-    except Exception as e:
-        print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
-        exit(1)
-    print('Time Cost: ', time.time() - start_time)
-    return queryID, param, data
+    return param, data
 
 def OutputPackage(data, result, queryID):
     """
-    Output final package to biz_model.biz_fir_asset_package.
+    Output final package to fll_t_dw.biz_fir_asset_package.
     """
-    sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
+    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
     try:
-        start_time = time.time()
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
         conn.autocommit = True
         cur = conn.cursor()
         print('Writing data...')
@@ -151,133 +102,124 @@ def OutputPackage(data, result, queryID):
         psycopg2.extras.execute_values(cur, sqlOutput, values_list)
         conn.commit()
         conn.close()
-        print('Time Cost: ', time.time() - start_time)
     except Exception as e:
         print(e) 
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
-queryID, param, data = ConnectDatabase()
-queryID = 'VEW7rCfpNeFVHaw9pFpa6G'
-queryID, param, data = TestData(queryID)
+param, data = ConnectDatabase(queryID)
 
-exit(1)
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
 # print('Parameter loading...')
-# with open("./parameterDemoAll.json") as f:
+# with open("./parameterDemoTest.json") as f:
 #     param = json.load(f)
 # queryID = "local_test_id"
 # print("==============================================================")
 # print(param)
 # print(data.shape)
-
 print("==============================================================")
 print('Parameters parsing...')
-try:
-    timeLimit = param['timeLimit'] if param['timeLimit'] > 0 else 600
-    print('model time limit:', timeLimit)
-    NbvCost = param['prefer']['nbvorCost']
-    maxOrMin = param['prefer']['maxOrMin']
-    fleetAgeLowBound = [-INF for _ in range(numLimit)]
-    fleetAgeUpBound = [INF for _ in range(numLimit)]
-    fleetAgeLimit = [None for _ in range(numLimit)]
-    fleetAgeGeq = [None for _ in range(numLimit)]
-    weightedAgeLowBound = [-INF for _ in range(numLimit)]
-    weightedAgeUpBound = [INF for _ in range(numLimit)]
-    weightedAgeLimit = [None for _ in range(numLimit)]
-    weightedAgeGeq = [None for _ in range(numLimit)]
-    lesseeType = [None for _ in range(numLimit)]
-    lesseeLimit = [None for _ in range(numLimit)]
-    lesseeGeq = [None for _ in range(numLimit)]
-    productType = [None for _ in range(numLimit)]
-    productLimit = [None for _ in range(numLimit)]
-    productGeq = [None for _ in range(numLimit)]
-    contractType = [None for _ in range(numLimit)]
-    contractLimit = [None for _ in range(numLimit)]
-    contractGeq = [None for _ in range(numLimit)]
-    statusType = [None for _ in range(numLimit)]
-    statusLimit = [None for _ in range(numLimit)]
-    statusGeq = [None for _ in range(numLimit)]
-    rmlLowBound = [-INF for _ in range(numLimit)]
-    rmlUpBound = [INF for _ in range(numLimit)]
-    rmlGeq = [None for _ in range(numLimit)]
-    rmlLimit = [None for _ in range(numLimit)]
 
-    minTotalNbv = param['totalNBVFrom']
-    maxTotalNbv = param['totalNBVTo']
+timeLimit = param['timeLimit'] if param['timeLimit'] > 0 else 600
+print('model time limit:', timeLimit)
+NbvCost = param['prefer']['nbvorCost']
+maxOrMin = param['prefer']['maxOrMin']
+fleetAgeLowBound = [-INF for _ in range(numLimit)]
+fleetAgeUpBound = [INF for _ in range(numLimit)]
+fleetAgeLimit = [None for _ in range(numLimit)]
+fleetAgeGeq = [None for _ in range(numLimit)]
+weightedAgeLowBound = [-INF for _ in range(numLimit)]
+weightedAgeUpBound = [INF for _ in range(numLimit)]
+weightedAgeLimit = [None for _ in range(numLimit)]
+weightedAgeGeq = [None for _ in range(numLimit)]
+lesseeType = [None for _ in range(numLimit)]
+lesseeLimit = [None for _ in range(numLimit)]
+lesseeGeq = [None for _ in range(numLimit)]
+productType = [None for _ in range(numLimit)]
+productLimit = [None for _ in range(numLimit)]
+productGeq = [None for _ in range(numLimit)]
+contractType = [None for _ in range(numLimit)]
+contractLimit = [None for _ in range(numLimit)]
+contractGeq = [None for _ in range(numLimit)]
+statusType = [None for _ in range(numLimit)]
+statusLimit = [None for _ in range(numLimit)]
+statusGeq = [None for _ in range(numLimit)]
+rmlLowBound = [-INF for _ in range(numLimit)]
+rmlUpBound = [INF for _ in range(numLimit)]
+rmlGeq = [None for _ in range(numLimit)]
+rmlLimit = [None for _ in range(numLimit)]
 
-    minTotalCost = param['totalCostFrom']
-    maxTotalCost = param['totalCostTo']
+minTotalNbv = param['totalNBVFrom']
+maxTotalNbv = param['totalNBVTo']
 
-    minTotalRent = param['totalRentFrom']
+minTotalCost = param['totalCostFrom']
+maxTotalCost = param['totalCostTo']
 
-    lesseeOthers = param['lessee']['others']['lessee']
-    lesseeOthersLimit = param['lessee']['others']['percent'] / 100
+minTotalRent = param['totalRentFrom']
 
-    topLesseeLimit = [
-        param['lessee']['topLessee']['top1']['percent'] / 100,
-        param['lessee']['topLessee']['top2']['percent'] / 100,
-        param['lessee']['topLessee']['top3']['percent'] / 100]
-    topLesseeGeq = [
-        param['lessee']['topLessee']['top1']['symbol'],
-        param['lessee']['topLessee']['top2']['symbol'],
-        param['lessee']['topLessee']['top3']['symbol']]
+lesseeOthers = param['lessee']['others']['lessee']
+lesseeOthersLimit = param['lessee']['others']['percent'] / 100
 
-    fleetAgeAvgLimit = param['containersAge']['average']['averageContainersAge']
-    fleetAgeAvgGeq = param['containersAge']['average']['symbol']
-    fleetAgeBasis = param['containersAge']['basis']
-    for i in range(len(param['containersAge']['list'])):
-        fleetAgeLowBound[i] = param['containersAge']['list'][i]['containersAgeFrom']
-        fleetAgeUpBound[i] = param['containersAge']['list'][i]['containersAgeTo']
-        fleetAgeLimit[i] = param['containersAge']['list'][i]['percent'] / 100
-        fleetAgeGeq[i] = param['containersAge']['list'][i]['symbol']
+topLesseeLimit = [
+    param['lessee']['topLessee']['top1']['percent'] / 100,
+    param['lessee']['topLessee']['top2']['percent'] / 100,
+    param['lessee']['topLessee']['top3']['percent'] / 100]
+topLesseeGeq = [
+    param['lessee']['topLessee']['top1']['symbol'],
+    param['lessee']['topLessee']['top2']['symbol'],
+    param['lessee']['topLessee']['top3']['symbol']]
 
-    weightedAgeAvgLimit = param['weightedAge']['average']['averageWeighedAge']
-    weightedAgeAvgGeq = param['weightedAge']['average']['symbol']
-    weightedAgeBasis = param['weightedAge']['basis']
-    for i in range(len(param['weightedAge']['list'])):
-        weightedAgeLowBound[i] = param['weightedAge']['list'][i]['weightedAgeFrom']
-        weightedAgeUpBound[i] = param['weightedAge']['list'][i]['weightedAgeTo']
-        weightedAgeLimit[i] = param['weightedAge']['list'][i]['percent'] / 100
-        weightedAgeGeq[i] = param['weightedAge']['list'][i]['symbol']
+fleetAgeAvgLimit = param['containersAge']['average']['averageContainersAge']
+fleetAgeAvgGeq = param['containersAge']['average']['symbol']
+fleetAgeBasis = param['containersAge']['basis']
+for i in range(len(param['containersAge']['list'])):
+    fleetAgeLowBound[i] = param['containersAge']['list'][i]['containersAgeFrom']
+    fleetAgeUpBound[i] = param['containersAge']['list'][i]['containersAgeTo']
+    fleetAgeLimit[i] = param['containersAge']['list'][i]['percent'] / 100
+    fleetAgeGeq[i] = param['containersAge']['list'][i]['symbol']
 
-    lesseeBasis = param['lessee']['basis']
-    for i in range(len(param['lessee']['list'])):
-        lesseeType[i] = param['lessee']['list'][i]['lessee']
-        lesseeLimit[i] = param['lessee']['list'][i]['percent'] / 100
-        lesseeGeq[i] = param['lessee']['list'][i]['symbol']
+weightedAgeAvgLimit = param['weightedAge']['average']['averageWeighedAge']
+weightedAgeAvgGeq = param['weightedAge']['average']['symbol']
+weightedAgeBasis = param['weightedAge']['basis']
+for i in range(len(param['weightedAge']['list'])):
+    weightedAgeLowBound[i] = param['weightedAge']['list'][i]['weightedAgeFrom']
+    weightedAgeUpBound[i] = param['weightedAge']['list'][i]['weightedAgeTo']
+    weightedAgeLimit[i] = param['weightedAge']['list'][i]['percent'] / 100
+    weightedAgeGeq[i] = param['weightedAge']['list'][i]['symbol']
 
-    statusBasis = param['status']['basis']
-    for i in range(len(param['status']['list'])):
-        statusType[i] = param['status']['list'][i]['statusType']
-        statusLimit[i] = param['status']['list'][i]['percent'] / 100
-        statusGeq[i] = param['status']['list'][i]['symbol']
+lesseeBasis = param['lessee']['basis']
+for i in range(len(param['lessee']['list'])):
+    lesseeType[i] = param['lessee']['list'][i]['lessee']
+    lesseeLimit[i] = param['lessee']['list'][i]['percent'] / 100
+    lesseeGeq[i] = param['lessee']['list'][i]['symbol']
 
-    productBasis = param['product']['basis']
-    for i in range(len(param['product']['list'])):
-        productType[i] = param['product']['list'][i]['productType']
-        productLimit[i] = param['product']['list'][i]['percent'] / 100
-        productGeq[i] = param['product']['list'][i]['symbol']
+statusBasis = param['status']['basis']
+for i in range(len(param['status']['list'])):
+    statusType[i] = param['status']['list'][i]['statusType']
+    statusLimit[i] = param['status']['list'][i]['percent'] / 100
+    statusGeq[i] = param['status']['list'][i]['symbol']
 
-    contractBasis = param['contractType']['basis']
-    for i in range(len(param['contractType']['list'])):
-        contractType[i] = param['contractType']['list'][i]['contractType']
-        contractLimit[i] = param['contractType']['list'][i]['percent'] / 100
-        contractGeq[i] = param['contractType']['list'][i]['symbol']
+productBasis = param['product']['basis']
+for i in range(len(param['product']['list'])):
+    productType[i] = param['product']['list'][i]['productType']
+    productLimit[i] = param['product']['list'][i]['percent'] / 100
+    productGeq[i] = param['product']['list'][i]['symbol']
 
-    rmlBasis = param['rml']['basis']
-    for i in range(len(param['rml']['list'])):
-        rmlLowBound[i] = param['rml']['list'][i]['rmlFrom']
-        rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
-        rmlGeq[i] = param['rml']['list'][i]['symbol']
-        rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
+contractBasis = param['contractType']['basis']
+for i in range(len(param['contractType']['list'])):
+    contractType[i] = param['contractType']['list'][i]['contractType']
+    contractLimit[i] = param['contractType']['list'][i]['percent'] / 100
+    contractGeq[i] = param['contractType']['list'][i]['symbol']
 
-except Exception as e:
-    print(e)
-    msg = 'Parsing Paramters Failed! ' + str(e)
-    ReportStatus(msg, 'F', queryID)
-    exit(1)
+rmlBasis = param['rml']['basis']
+for i in range(len(param['rml']['list'])):
+    rmlLowBound[i] = param['rml']['list'][i]['rmlFrom']
+    # rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
+    rmlGeq[i] = param['rml']['list'][i]['symbol']
+    rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
+
+
 print("==============================================================")
 print('Data processing...')
 try:
@@ -347,7 +289,6 @@ except Exception as e:
     msg = 'Processing Data Failed!' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
-
 def BuildModel():
     print("==============================================================")
     print('Model preparing...')
@@ -456,11 +397,11 @@ def BuildModel():
                         lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis])))
             else:
                 # find max top limit
-                print('Max Top:', maxTop)
+                print('Set Other Lessee')
+                print('\t Max Top:', maxTop)
                 constraints.append(
-                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), maxTop + 1) - \
-                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), maxTop) <= \
-                        lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop + 1) <= \
+                        lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis]))) + cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop)
         
     # status
     if statusBasis:
@@ -528,7 +469,7 @@ try:
     prob = SolveModel(prob, timeLimit, threadLimit)
 except Exception as e:
     print(e)
-    ReportStatus('Model Failed! Please Contact Develope Team!', 'F', queryID)
+    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID)
     exit(1)
 
 
@@ -660,8 +601,8 @@ def ValidResult(result):
                 for i in range(3):
                     if topLesseeLimit[i]:
                         maxTop = i+1
-                print('\t top others is {0}'.format(round(top4Lessee[maxTop], 4)))
-                if top4Lessee[maxTop] > lesseeOthersLimit:
+                print('\t top others is {0}'.format(round(top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]), 4)))
+                if top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]) > lesseeOthersLimit:
                     print('\t \t failed')
                     passed = False
 
@@ -747,4 +688,6 @@ else:
         exit(1)
 
 print('Total Time Cost:', time.time() - total_time)
+
+
 
