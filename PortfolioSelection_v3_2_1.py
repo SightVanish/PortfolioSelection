@@ -19,12 +19,11 @@ Check before submit
 """
 INF = float('inf')
 total_time = time.time()
-local = False # use local file or not
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
-parser = argparse.ArgumentParser(description="This is Flornes Porfolio Selection Model.")
+parser = argparse.ArgumentParser(description="Flornes porfolio selection model")
 parser.add_argument('--queryID', '-id', type=str, help='Query ID')
 parser.add_argument('--numLimit', '-n', type=int, default=5, help='Maximum number of constraints in each condition')
 parser.add_argument('--threadLimit', '-t', type=int, default=4, help='Maximum number of threads')
@@ -40,12 +39,12 @@ if queryID is None:
 
 def ReportStatus(msg, flag, queryID):
     """
-    Print message and update status in fll_t_dw.biz_fir_query_parameter_definition.
+    Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
+    sql = "update biz_model.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(sql)
@@ -54,13 +53,12 @@ def ReportStatus(msg, flag, queryID):
 
 def ConnectDatabase(queryID):
     """
-    Load parameters in JSON from fll_t_dw.biz_fir_query_parameter_definition and load data from fll_t_dw.biz_ads_fir_pkg_data.
+    Load parameters in JSON from biz_model.biz_fir_query_parameter_definition and load data from biz_model.biz_ads_fir_pkg_data.
     """
-    # load parameters
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        sqlParameter = "select python_json from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
             raise Exception("No Valid Query Request is Found!")
@@ -71,14 +69,12 @@ def ConnectDatabase(queryID):
     except Exception as e:
         print("Loading Parameters from GreenPlum Failed!\n", e)
         exit(1)
-    
-    # load data
     try:
         print('Data loading...')
         sqlInput = """
             select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
             contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-            from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
+            from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
         """.format(queryID) 
         data = pd.read_sql(sqlInput, conn)
         if data.shape[0] == 0:
@@ -94,11 +90,11 @@ def ConnectDatabase(queryID):
 
 def OutputPackage(data, result, queryID):
     """
-    Output final package to fll_t_dw.biz_fir_asset_package.
+    Output final package to biz_model.biz_fir_asset_package.
     """
-    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
+    sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
     try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         conn.autocommit = True
         cur = conn.cursor()
         print('Writing data...')
@@ -114,21 +110,17 @@ def OutputPackage(data, result, queryID):
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
         exit(1)
 
+param, data = ConnectDatabase(queryID)
 
-
-if local:
-    print('Data reading...')
-    data = pd.read_csv('./local_data.csv')
-    print('Parameter loading...')
-    with open("./parameterDemoTest.json") as f:
-        param = json.load(f)
-    queryID = "local_test_id"
-    print("==============================================================")
-    print(param)
-    print(data.shape)
-else:
-    param, data = ConnectDatabase(queryID)
-
+# print('Data reading...')
+# data = pd.read_csv('./local_data.csv')
+# print('Parameter loading...')
+# with open("./parameterDemoTest.json") as f:
+#     param = json.load(f)
+# queryID = "local_test_id"
+# print("==============================================================")
+# print(param)
+# print(data.shape)
 print("==============================================================")
 print('Parameters parsing...')
 try:
@@ -229,13 +221,12 @@ try:
         # rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
         rmlGeq[i] = param['rml']['list'][i]['symbol']
         rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
+
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
-
-
 print("==============================================================")
 print('Data processing...')
 try:
@@ -279,10 +270,6 @@ try:
     onHireStatus = data['OnHireStatus'].to_numpy()
     offHireStatus = data['OffHireStatus'].to_numpy()
     noneHireStatus = data['NoneStatus'].to_numpy()
-    hireStatus = {}
-    hireStatus['ON'] = onHireStatus
-    hireStatus['OF'] = offHireStatus
-    hireStatus['None'] = noneHireStatus 
     lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
     fleetAge = []
     weightedAge = []
@@ -300,13 +287,15 @@ try:
     basis['ceu'] = ceu
     basis['teu'] = teu
     basis['cost'] = cost
+    hireStatus = {}
+    hireStatus['ON'] = onHireStatus
+    hireStatus['OF'] = offHireStatus
+    hireStatus['None'] = noneHireStatus 
 except Exception as e:
     print(e)
     msg = 'Processing Data Failed!' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
-
-
 def BuildModel():
     print("==============================================================")
     print('Model preparing...')
@@ -315,12 +304,17 @@ def BuildModel():
     x = cp.Variable(shape=data.shape[0], boolean=True)
     # objective function 
     if NbvCost:
-        obj = cp.sum(cp.multiply(x, nbv))
-    else:
+        print('Set Cost as target', end=' ')
         obj = cp.sum(cp.multiply(x, cost))
+    else:
+        print('Set Nbv as target', end=' ')
+        obj = cp.sum(cp.multiply(x, nbv))
+        
     if maxOrMin:
+        print('Max')
         objective = cp.Maximize(obj)
     else:
+        print('Min')
         objective = cp.Minimize(obj)
 
     # constraints
@@ -475,7 +469,7 @@ def SolveModel(prob, timeLimit, threadLimit):
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.CBC, verbose=True, maximumSeconds=timeLimit, numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=False, maximumSeconds=timeLimit, numberThreads=threadLimit)
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
@@ -667,16 +661,17 @@ def ValidResult(result):
                         passed = False
     if rmlBasis:
         for i in range(numLimit):
-            resultRML = sum(result*rml[i]*basis[rmlBasis])/sum(result*basis[rmlBasis])
-            print("rml from {0} to {1} is {2}".format(rmlLowBound[i], rmlUpBound[i], round(resultRML, 4)))
-            if rmlGeq[i]:
-                if resultRML < rmlLimit[i]:
-                    print('\t >= failed')
-                    passed = False
-            else:
-                if resultRML > rmlLimit[i]:
-                    print('\t <= failed')
-                    passed = False
+            if rmlLimit[i]:
+                resultRML = sum(result*rml[i]*basis[rmlBasis])/sum(result*basis[rmlBasis])
+                print("rml from {0} to {1} is {2}".format(rmlLowBound[i], rmlUpBound[i], round(resultRML, 4)))
+                if rmlGeq[i]:
+                    if resultRML < rmlLimit[i]:
+                        print('\t >= failed')
+                        passed = False
+                else:
+                    if resultRML > rmlLimit[i]:
+                        print('\t <= failed')
+                        passed = False
 
     if passed:
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
