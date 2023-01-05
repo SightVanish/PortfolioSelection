@@ -18,6 +18,13 @@ Check before submit
 3. enable ouput package
 4. switch database 
 5. bug free
+TODO:
+1. add unit number constraints (contract number + product type)
+    1.1 add data: contract_num - code done
+    1.2 add parameter: numContractProductLimit = positive int or 0 (0--no limit)
+    1.3 modify build model - code done
+    1.4 modify validation part - code done
+    1.5 test all above
 """
 INF = float('inf')
 total_time = time.time()
@@ -74,7 +81,7 @@ def ConnectDatabase(queryID):
     try:
         print('Data loading...')
         sqlInput = """
-            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, \
+            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
             contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
             from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
         """.format(queryID) 
@@ -123,11 +130,13 @@ param, data = ConnectDatabase(queryID)
 # print("==============================================================")
 # print(param)
 # print(data.shape)
+
 print("==============================================================")
 print('Parameters parsing...')
 try:
     timeLimit = param['timeLimit'] if param['timeLimit'] > 0 else 600
     print('model time limit:', timeLimit)
+    numContractProductLimit = param['numContractProductLimit']
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
     fleetAgeLowBound = [-INF for _ in range(numLimit)]
@@ -223,12 +232,12 @@ try:
         # rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
         rmlGeq[i] = param['rml']['list'][i]['symbol']
         rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
-
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
+
 print("==============================================================")
 print('Data processing...')
 try:
@@ -237,8 +246,14 @@ try:
     data['OffHireStatus'] = data['billing'].apply(lambda x: 1 if x=='OF' else 0)
     data['NoneStatus'] = data['billing'].apply(lambda x: 1 if (x!='ON' and x!='OF') else 0)
     # One hot all lessees
-    for lesseeName in data['customer'].value_counts().index:
-        data[lesseeName] = data['customer'].apply(lambda x: 1 if x==lesseeName else 0)
+    for l in data['customer'].value_counts().index:
+        data[l] = data['customer'].apply(lambda x: 1 if x==l else 0)
+    # One hot all contract number
+    for c in data['contract_num'].value_counts().index:
+        data[c] = data['contract_num'].apply(lambda x: 1 if x==c else 0)
+    # One hot all product type
+    for p in data['product'].value_counts().index:
+        data[p] = data['product'].apply(lambda x: 1 if x==p else 0)
     for i in range(numLimit):
         # Container Age
         if fleetAgeLimit[i]:
@@ -261,6 +276,12 @@ try:
             column_name = 'RML{0}'.format(i)
             data[column_name] = data['rml'].apply(lambda x: 1 if rmlLowBound[i]<=x<=rmlUpBound[i] else 0)
     
+    def ContractProduct(a, b, c, p):
+        if a == c and b == p:
+            return 1
+        else:
+            return 0
+
     # convert data to numpy
     nbv = data['nbv'].to_numpy()
     cost = data['cost'].to_numpy()
@@ -272,12 +293,15 @@ try:
     onHireStatus = data['OnHireStatus'].to_numpy()
     offHireStatus = data['OffHireStatus'].to_numpy()
     noneHireStatus = data['NoneStatus'].to_numpy()
-    lesseeOneHot = {lesseeName: data[lesseeName].to_numpy() for lesseeName in data['customer'].value_counts().index}
+    lesseeOneHot = {l: data[l].to_numpy() for l in data['customer'].value_counts().index}
+    contractNumOneHot = [data[c].to_numpy() for c in data['contract_num'].value_counts().index]
+    productTypeOneHot = [data[p].to_numpy() for p in data['product'].value_counts().index]
     fleetAge = []
     weightedAge = []
     product = []
     contract = []
     rml = []
+
     for i in range(numLimit):
         fleetAge.append(data['FleetAge{0}'.format(i)].to_numpy() if fleetAgeLimit[i] else None)
         weightedAge.append(data['WeightedAge{0}'.format(i)].to_numpy() if weightedAgeLimit[i] else None)
@@ -298,6 +322,7 @@ except Exception as e:
     msg = 'Processing Data Failed!' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
+
 def BuildModel():
     print("==============================================================")
     print('Model preparing...')
@@ -413,8 +438,8 @@ def BuildModel():
                 # find max top limit
                 print('Set Other Lessee')
                 print('\t Max Top:', maxTop)
-                constraints.append(
-                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop + 1) <= \
+                constraints.append(cp.sum_largest( \
+                    cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop + 1) <= \
                         lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis]))) + cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop)
         
     # status
@@ -461,9 +486,17 @@ def BuildModel():
                 else:
                     constraints.append(cp.sum(cp.multiply(x, rml[i] * basis[rmlBasis])) <= \
                         rmlLimit[i] * cp.sum(cp.multiply(x, basis[rmlBasis])))
-    
+
+    # set number of contract_num & product_type limit
+    if numContractProductLimit:
+        print('Set number limit on contract-product')
+        constraints.append(cp.sum_smallest( \
+                    cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot], 1) >= numContractProductLimit))
+
     prob = cp.Problem(objective, constraints)
     print('Time Cost', time.time() - start_time)
+
+
     return prob, x
 
 def SolveModel(prob, timeLimit, threadLimit):
@@ -619,6 +652,13 @@ def ValidResult(result):
                 if top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]) > lesseeOthersLimit:
                     print('\t \t failed')
                     passed = False
+        
+        if numContractProductLimit:
+            minNumContractProduct = min([sum(result*c*p) for c in contractNumOneHot for p in productTypeOneHot])
+            print('Minimum unit number of ProductNumber--ProductType is {0}'.format(minNumContractProduct))
+            if minNumContractProduct < numContractProductLimit:
+                print('\t failed')
+                passed = False
 
     if statusBasis:
         for i in range(numLimit):
