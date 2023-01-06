@@ -102,34 +102,34 @@ def OutputPackage(data, result, queryID):
     Output final package to biz_model.biz_fir_asset_package.
     """
     sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
-    try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")        
-        conn.autocommit = True
-        cur = conn.cursor()
-        print('Writing data...')
-        values_list = []
-        for i in range(len(result)):
-            if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0))
-        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(e) 
-        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
-        exit(1)
+    # try:
+    #     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")        
+    #     conn.autocommit = True
+    #     cur = conn.cursor()
+    #     print('Writing data...')
+    #     values_list = []
+    #     for i in range(len(result)):
+    #         if result[i]:
+    #             values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0))
+    #     psycopg2.extras.execute_values(cur, sqlOutput, values_list)
+    #     conn.commit()
+    #     conn.close()
+    # except Exception as e:
+    #     print(e) 
+    #     ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
+    #     exit(1)
 
 param, data = ConnectDatabase(queryID)
 
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
-# print('Parameter loading...')
-# with open("./parameterDemoTest.json") as f:
-#     param = json.load(f)
-# queryID = "local_test_id"
-# print("==============================================================")
-# print(param)
-# print(data.shape)
+print('Parameter loading...')
+with open("./parameterDemoTest.json") as f:
+    param = json.load(f)
+queryID = "local_test_id"
+print("==============================================================")
+print(param)
+print(data.shape)
 
 print("==============================================================")
 print('Parameters parsing...')
