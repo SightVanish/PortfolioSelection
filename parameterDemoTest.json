@@ -1,1 +1,75 @@
-{"prefer": {"maxOrMin": 1, "nbvorCost": 0}, "timeLimit": 100, "totalNBVFrom": 180000000.0, "totalNBVTo": 220000000.0, "totalCostFrom": 10.0, "totalCostTo": 2000.0, "containersAge": {"basis": "", "average": {"symbol": "", "averageContainersAge": ""}, "list": []}, "weightedAge": {"basis": "", "average": {"symbol": "", "averageWeighedAge": ""}, "list": []}, "lessee": {"basis": "nbv", "others": {"lessee": ["COSMR", "New Factory Container", "MINIUS", "NEPSCTL", "CUL", "MSC", "ONE", "EQUIPE", "SINOKOR"], "symbol": 0, "percent": 50.0}, "list": [{"lessee": "COSCO", "symbol": 0, "percent": 10.0}], "allList": ["COSMR", "New Factory Container", "MINIUS", "NEPSCTL", "CUL", "MSC", "ONE", "EQUIPE", "SINOKOR"], "topLessee": {"top1": {"symbol": 0, "percent": 0.0}, "top2": {"symbol": 0, "percent": 0.0}, "top3": {"symbol": 0, "percent": 0.0}}}, "status": {"basis": "", "list": []}, "product": {"basis": "", "list": []}, "contractType": {"basis": "", "list": []}, "totalRentFrom": 5450000.0, "rml": {"basis": "", "list": []}}
+{
+    "prefer": {
+        "maxOrMin": 1, 
+        "nbvorCost": 0
+    }, 
+    "timeLimit": 100, 
+    "totalNBVFrom": 18000000.0, 
+    "totalNBVTo": 20000000.0, 
+    "totalCostFrom": 0, 
+    "totalCostTo": 0, 
+    "numContractProductLimit": 10,
+    "containersAge": {
+        "basis": "", 
+        "average": {
+            "symbol": "", 
+            "averageContainersAge": ""
+        }, 
+        "list": []
+    }, 
+    "weightedAge": {
+        "basis": "", 
+        "average": {
+            "symbol": "", 
+            "averageWeighedAge": ""
+        }, 
+        "list": []
+    }, 
+    "lessee": {
+        "basis": "nbv", 
+        "others": {
+            "lessee": [], 
+            "symbol": 0, 
+            "percent": 0
+        }, 
+        "list": [
+            {
+                "lessee": "COSCO", 
+                "symbol": 0, 
+                "percent": 10.0
+            }
+            ], 
+        "allList": [], 
+        "topLessee": {
+            "top1": {
+                "symbol": 0, 
+                "percent": 0.0
+            }, 
+            "top2": {
+                "symbol": 0, 
+                "percent": 0.0
+            }, 
+            "top3": {
+                "symbol": 0, 
+                "percent": 0.0
+            }
+        }
+    }, 
+    "status": {
+        "basis": "", 
+        "list": []
+    }, 
+    "product": {
+        "basis": "", 
+        "list": []
+    }, 
+    "contractType": {
+        "basis": "", 
+        "list": []
+    }, 
+    "totalRentFrom": 0, 
+    "rml": {
+        "basis": "", 
+        "list": []
+    }
+}

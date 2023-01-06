@@ -25,6 +25,7 @@ TODO:
     1.3 modify build model - code done
     1.4 modify validation part - code done
     1.5 test all above
+2. verify weighted-age formula
 """
 INF = float('inf')
 total_time = time.time()
@@ -50,7 +51,7 @@ def ReportStatus(msg, flag, queryID):
     """
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update biz_model.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}' where id='{3}'".format(msg, flag, datetime.datetime.now(), queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
     # conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")    
@@ -64,36 +65,52 @@ def ConnectDatabase(queryID):
     """
     Load parameters in JSON from biz_model.biz_fir_query_parameter_definition and load data from biz_model.biz_ads_fir_pkg_data.
     """
-    try:
-        print('Parameters reading...')
-        sqlParameter = "select python_json from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")        
-        paramInput = pd.read_sql(sqlParameter, conn)
-        if paramInput.shape[0] == 0:
-            raise Exception("No Valid Query Request is Found!")
-        elif paramInput.shape[0] > 1:
-            raise Exception("More than One Valid Query Requests are Found!")
-        param = json.loads(paramInput['python_json'][0])
-        print(param)
-    except Exception as e:
-        print("Loading Parameters from GreenPlum Failed!\n", e)
-        exit(1)
-    try:
-        print('Data loading...')
-        sqlInput = """
-            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
-            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-            from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        """.format(queryID) 
-        data = pd.read_sql(sqlInput, conn)
-        if data.shape[0] == 0:
-            raise Exception("No Data Available!")
-        print('Input data shape:', data.shape)
-        conn.close()
-    except Exception as e:
-        print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
-        exit(1)
+    print('Parameters reading...')
+    sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")        
+    paramInput = pd.read_sql(sqlParameter, conn)
+    if paramInput.shape[0] == 0:
+        raise Exception("No Valid Query Request is Found!")
+    elif paramInput.shape[0] > 1:
+        raise Exception("More than One Valid Query Requests are Found!")
+    param = json.loads(paramInput['python_json'][0])
+    # print(param)
+
+    print('Data loading...')
+    # sqlInput = """
+    #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
+    #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+    #     from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
+    # """.format(queryID)
+    with open("./parameterDemoTest.json") as f:
+        param = json.load(f)
+    
+    sqlInput = \
+    """
+    select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
+    contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+    from fll_t_dw.biz_ads_fir_pkg_data p1
+    inner join 
+    (select contract_num, product
+    from(
+    select contract_num, product, count(*) num
+    from fll_t_dw.biz_ads_fir_pkg_data
+    WHERE query_id='{1}'
+    group by 1, 2
+    ) p1 
+    where num >= {0}) p2
+    on p1.contract_num=p2.contract_num and p1.product=p2.product
+    WHERE query_id='{1}'
+    """.format(param['numContractProductLimit'], queryID) 
+
+
+
+    data = pd.read_sql(sqlInput, conn)
+    if data.shape[0] == 0:
+        raise Exception("No Data Available!")
+    print('Input data shape:', data.shape)
+    conn.close()
+
 
     return param, data
 
@@ -124,8 +141,8 @@ param, data = ConnectDatabase(queryID)
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
 print('Parameter loading...')
-with open("./parameterDemoTest.json") as f:
-    param = json.load(f)
+# with open("./parameterDemoTest.json") as f:
+#     param = json.load(f)
 queryID = "local_test_id"
 print("==============================================================")
 print(param)
@@ -288,6 +305,7 @@ try:
     ceu = data['ceu'].to_numpy()
     teu = data['teu'].to_numpy()
     rent = data['rent'].to_numpy()
+    rent[np.isnan(rent)] = 0 # TODO: this should not be included here
     fleetAgeAvg = data['fleet_year'].to_numpy()
     weightedAgeAvg = data['weighted_age'].to_numpy()
     onHireStatus = data['OnHireStatus'].to_numpy()
@@ -489,9 +507,17 @@ def BuildModel():
 
     # set number of contract_num & product_type limit
     if numContractProductLimit:
-        print('Set number limit on contract-product')
-        constraints.append(cp.sum_smallest( \
-                    cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot], 1) >= numContractProductLimit))
+        # print('Set number limit on contract-product')
+        # constraints.append(cp.sum_smallest( \
+        #             cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
+        print('Set number limit on contract-product >=', numContractProductLimit)
+        # constraints.append(cp.sum_smallest( \
+        #             cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
+        for c in contractNumOneHot:
+            for p in productTypeOneHot:
+                if sum(c*p) > 0:
+                    print(sum(c*p))
+                    constraints.append(cp.sum(cp.multiply(x, c*p)) >= numContractProductLimit)
 
     prob = cp.Problem(objective, constraints)
     print('Time Cost', time.time() - start_time)
@@ -511,13 +537,10 @@ def SolveModel(prob, timeLimit, threadLimit):
     print('Time Cost', time.time() - start_time)
     return prob
 
-try:
-    prob, x = BuildModel()
-    prob = SolveModel(prob, timeLimit, threadLimit)
-except Exception as e:
-    print(e)
-    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID)
-    exit(1)
+
+prob, x = BuildModel()
+prob = SolveModel(prob, timeLimit, threadLimit)
+
 
 
 def ValidResult(result):
@@ -654,7 +677,7 @@ def ValidResult(result):
                     passed = False
         
         if numContractProductLimit:
-            minNumContractProduct = min([sum(result*c*p) for c in contractNumOneHot for p in productTypeOneHot])
+            minNumContractProduct = min([sum(result*c*p) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0])
             print('Minimum unit number of ProductNumber--ProductType is {0}'.format(minNumContractProduct))
             if minNumContractProduct < numContractProductLimit:
                 print('\t failed')
