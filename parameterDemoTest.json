@@ -4,16 +4,16 @@
         "nbvorCost": 0
     }, 
     "timeLimit": 100, 
-    "totalNBVFrom": 18000000.0, 
+    "totalNBVFrom": 1800000.0, 
     "totalNBVTo": 20000000.0, 
-    "totalCostFrom": 0, 
-    "totalCostTo": 0, 
-    "numContractProductLimit": 10,
+    "totalCostFrom": 10, 
+    "totalCostTo": 100000000, 
+    "numContractProductLimit": 1,
     "containersAge": {
-        "basis": "", 
+        "basis": "ceu", 
         "average": {
-            "symbol": "", 
-            "averageContainersAge": ""
+            "symbol": 0, 
+            "averageContainersAge": 12
         }, 
         "list": []
     }, 
@@ -28,30 +28,30 @@
     "lessee": {
         "basis": "nbv", 
         "others": {
-            "lessee": [], 
+            "lessee": ["COSCO"], 
             "symbol": 0, 
-            "percent": 0
+            "percent": 11
         }, 
         "list": [
             {
-                "lessee": "COSCO", 
+                "lessee": "", 
                 "symbol": 0, 
-                "percent": 10.0
+                "percent": 0
             }
             ], 
         "allList": [], 
         "topLessee": {
             "top1": {
                 "symbol": 0, 
-                "percent": 0.0
+                "percent": 0
             }, 
             "top2": {
                 "symbol": 0, 
-                "percent": 0.0
+                "percent": 0
             }, 
             "top3": {
                 "symbol": 0, 
-                "percent": 0.0
+                "percent": 50
             }
         }
     }, 
