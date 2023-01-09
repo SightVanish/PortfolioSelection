@@ -30,6 +30,7 @@ Update:
 2. build model set number limit
 3. validatoin part
 4. update rent validate
+5. probably others TODO
 """
 INF = float('inf')
 total_time = time.time()
@@ -679,7 +680,7 @@ def ValidResult(result):
                 tmp = {}
                 tmp['status'] = statusType[i]
                 tmp['percent'] = resultStatus * 100
-                l.append(l)
+                l.append(tmp)
                 if statusGeq[i]:
                     if resultStatus < statusLimit[i]:
                         print('\t >= failed')

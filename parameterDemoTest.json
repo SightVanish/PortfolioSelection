@@ -8,20 +8,20 @@
     "totalNBVTo": 20000000.0, 
     "totalCostFrom": 10, 
     "totalCostTo": 100000000, 
-    "numContractProductLimit": 1,
+    "numContractProductLimit": 10,
     "containersAge": {
-        "basis": "ceu", 
+        "basis": "", 
         "average": {
             "symbol": 0, 
-            "averageContainersAge": 12
+            "averageContainersAge": 0
         }, 
         "list": []
     }, 
     "weightedAge": {
         "basis": "", 
         "average": {
-            "symbol": "", 
-            "averageWeighedAge": ""
+            "symbol": 0, 
+            "averageWeighedAge": 0
         }, 
         "list": []
     }, 
@@ -51,25 +51,40 @@
             }, 
             "top3": {
                 "symbol": 0, 
-                "percent": 50
+                "percent": 55
             }
         }
     }, 
     "status": {
-        "basis": "", 
-        "list": []
+        "basis": "teu", 
+        "list": [
+            {
+                "statusType":"OF",
+                "symbol": 1,
+                "percent": 80
+            }
+        ]
     }, 
     "product": {
         "basis": "", 
-        "list": []
+        "list": [
+        ]
     }, 
     "contractType": {
         "basis": "", 
-        "list": []
+        "list": [
+        ]
     }, 
-    "totalRentFrom": 0, 
+    "totalRentFrom": 1000, 
     "rml": {
-        "basis": "", 
-        "list": []
+        "basis": "nbv", 
+        "list": [
+            {
+                "rmlFrom": 1,
+                "rmlTo": "",
+                "symbol": 1,
+                "percent": 50
+            }
+        ]
     }
 }
