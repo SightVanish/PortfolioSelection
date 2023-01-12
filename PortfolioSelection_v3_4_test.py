@@ -81,7 +81,7 @@ def ConnectDatabase(queryID):
     #     from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
     # """.format(queryID) 
 
-
+    param["numContractProductLimit"] = 150
     sqlInput = \
     """
     select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
@@ -307,11 +307,11 @@ def BuildModel():
     x = cp.Variable(shape=data.shape[0], boolean=True)
     # objective function 
     if NbvCost:
-        print('Set Cost as target', end=' ')
-        obj = cp.sum(cp.multiply(x, cost))
-    else:
         print('Set Nbv as target', end=' ')
         obj = cp.sum(cp.multiply(x, nbv))
+    else:
+        print('Set Cost as target', end=' ')
+        obj = cp.sum(cp.multiply(x, cost))
         
     if maxOrMin:
         print('Max')

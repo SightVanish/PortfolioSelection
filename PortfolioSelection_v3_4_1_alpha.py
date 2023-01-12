@@ -342,11 +342,11 @@ def BuildModel():
     x = cp.Variable(shape=data.shape[0], boolean=True)
     # objective function 
     if NbvCost:
-        print('Set Cost as target', end=' ')
-        obj = cp.sum(cp.multiply(x, cost))
-    else:
         print('Set Nbv as target', end=' ')
         obj = cp.sum(cp.multiply(x, nbv))
+    else:
+        print('Set Cost as target', end=' ')
+        obj = cp.sum(cp.multiply(x, cost))
         
     if maxOrMin:
         print('Max')
@@ -504,10 +504,7 @@ def BuildModel():
     if numContractProductLimit:
         contractProductType = [c*p for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]
         delta = cp.Variable(shape=len(contractProductType), boolean=True)
-
-        print([sum(i) for i in contractProductType])
-        print(len(contractProductType))
-        print('Set number limit on contract-product >=', numContractProductLimit)
+        print('Set number limit on contract-product')
         # constraints.append(cp.sum_smallest(
         #     cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
         for i in range(len(contractProductType)):

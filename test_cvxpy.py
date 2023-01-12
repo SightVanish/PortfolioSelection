@@ -37,6 +37,13 @@ constraints.append(cp.sum(cp.multiply(x,e)) <= n/3)
 # constraints.append(cp.sum(cp.multiply(x,a)) >= n)
 
 
+"""
+For constraints like `x*a > 100 if x*a != 0`, we can treat x*a as semi-continuous:
+`100*delta <= a*x <= infinity*delta, delta = 1 or 0`
+
+"""
+
+
 prob = cp.Problem(objective, constraints)
 
 # solve model

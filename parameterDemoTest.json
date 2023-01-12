@@ -1,14 +1,14 @@
 {
     "prefer": {
         "maxOrMin": 1, 
-        "nbvorCost": 0
+        "nbvorCost": 1
     }, 
     "timeLimit": 100, 
     "totalNBVFrom": 100000, 
     "totalNBVTo": 0, 
     "totalCostFrom": 0, 
     "totalCostTo": 0, 
-    "numContractProductLimit": 100,
+    "numContractProductLimit": 150,
     "containersAge": {
         "basis": "", 
         "average": {
@@ -67,8 +67,14 @@
     }, 
     "totalRentFrom": 1000, 
     "rml": {
-        "basis": "", 
+        "basis": "ceu", 
         "list": [
+            {
+                "rmlFrom": 1,
+                "rmlTo": "",
+                "symbol": 1,
+                "percent": 50
+            }
         ]
     }
 }
