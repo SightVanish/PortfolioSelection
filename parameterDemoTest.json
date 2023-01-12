@@ -4,11 +4,11 @@
         "nbvorCost": 0
     }, 
     "timeLimit": 100, 
-    "totalNBVFrom": 1800000.0, 
-    "totalNBVTo": 20000000.0, 
-    "totalCostFrom": 10, 
-    "totalCostTo": 100000000, 
-    "numContractProductLimit": 10,
+    "totalNBVFrom": 100000, 
+    "totalNBVTo": 0, 
+    "totalCostFrom": 0, 
+    "totalCostTo": 0, 
+    "numContractProductLimit": 100,
     "containersAge": {
         "basis": "", 
         "average": {
@@ -28,16 +28,11 @@
     "lessee": {
         "basis": "nbv", 
         "others": {
-            "lessee": ["COSCO"], 
+            "lessee": "", 
             "symbol": 0, 
-            "percent": 11
+            "percent": 0
         }, 
         "list": [
-            {
-                "lessee": "", 
-                "symbol": 0, 
-                "percent": 0
-            }
             ], 
         "allList": [], 
         "topLessee": {
@@ -51,18 +46,13 @@
             }, 
             "top3": {
                 "symbol": 0, 
-                "percent": 55
+                "percent": 50
             }
         }
     }, 
     "status": {
-        "basis": "teu", 
+        "basis": "", 
         "list": [
-            {
-                "statusType":"OF",
-                "symbol": 1,
-                "percent": 80
-            }
         ]
     }, 
     "product": {
@@ -77,14 +67,8 @@
     }, 
     "totalRentFrom": 1000, 
     "rml": {
-        "basis": "nbv", 
+        "basis": "", 
         "list": [
-            {
-                "rmlFrom": 1,
-                "rmlTo": "",
-                "symbol": 1,
-                "percent": 50
-            }
         ]
     }
 }

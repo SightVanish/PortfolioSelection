@@ -485,10 +485,17 @@ def BuildModel():
 
     # set number of contract_num & product_type limit
     if numContractProductLimit:
-        print('Set number limit on contract-product >=', numContractProductLimit)
-        constraints.append(cp.sum_smallest(
-            cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
+        contractProductType = [c*p for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]
+        delta = cp.Variable(shape=len(contractProductType), boolean=True)
 
+        print([sum(i) for i in contractProductType])
+        print(len(contractProductType))
+        print('Set number limit on contract-product >=', numContractProductLimit)
+        # constraints.append(cp.sum_smallest(
+        #     cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
+        for i in range(len(contractProductType)):
+            constraints.append(cp.sum(cp.multiply(x, contractProductType[i])) >= numContractProductLimit * delta[i])
+            constraints.append(cp.sum(cp.multiply(x, contractProductType[i])) <= 9999999 * delta[i])
     prob = cp.Problem(objective, constraints)
     print('Time Cost', time.time() - start_time)
 
@@ -776,8 +783,10 @@ def ValidResult(result):
         
     # Contract-Product 
     if numContractProductLimit:
-        minNumContractProduct = min([sum(result*c*p) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0])
+        contractProductTypeResult = [result*c*p for c in contractNumOneHot for p in productTypeOneHot if sum(result*c*p) > 0]
+        minNumContractProduct = min([sum(i) for i in contractProductTypeResult])
         print('Minimum unit number of ProductNumber-ProductType is {0}'.format(minNumContractProduct))
+        # print([sum(i) for i in contractProductTypeResult])
         reportJson['minNumContractProduct'] = int(minNumContractProduct)
         if minNumContractProduct < numContractProductLimit:
             print('\t failed')
