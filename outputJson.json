@@ -1,0 +1,71 @@
+{
+    "nbv": 100,
+    "cost": 100,
+    "rent": 100,
+    "fleetAverageAge": 10,
+    "fleetAge": [
+        {
+            "from": 1,
+            "to": 10,
+            "percent": 100
+        }
+    ],
+    "weightedAverageAge": 10,
+    "weightedAge": [
+        {
+            "from": 1,
+            "to": 10,
+            "percent": 100
+        }
+    ],
+    "lessee": [
+       {
+            "lessee": "MSC",
+            "percent": 10
+       },
+       {
+            "top": 1,
+            "lessee": "MSC",
+            "percent": 10
+       },
+       {
+            "top": 2,
+            "lessee": ["MSC", "HIPC"],
+            "percent": 20
+       },
+       {
+            "top": 3,
+            "lessee": ["MSC", "HIPC", "SCPP"],
+            "percent": 30
+        },
+        {
+            "percentOthers": 10
+        }
+    ],
+    "status": [
+        {
+           "status": "ON",
+           "percent": 100
+        }
+    ],
+    "product": [
+        {
+            "productType": ["D20", "D40"],
+            "percent": 100
+        }
+    ],
+    "contract": [
+        {
+            "contractType": ["LP", "LT"],
+            "percent": 100
+        }
+    ],
+    "rml": [
+        {
+            "from": 10,
+            "to": Infinity,
+            "percent": 100
+        }
+    ],
+    "minNumContractProduct": 100
+}

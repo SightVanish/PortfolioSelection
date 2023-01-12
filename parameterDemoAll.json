@@ -4,15 +4,16 @@
         "maxOrMin": 0
     },
     "timeLimit": 300,
-    "totalNBVFrom": 10000000,
-    "totalNBVTo": 30000000,
-    "totalCostFrom": 10000000,
-    "totalCostTo": "",
-    "totalRentFrom": 100000,
+    "totalNBVFrom": 0,
+    "totalNBVTo": 0,
+    "totalCostFrom": 0,
+    "totalCostTo": 0,
+    "totalRentFrom": 0,
+    "numContractProductLimit": 1,
     "containersAge": {
         "average": {
-            "symbol": 0,
-            "averageContainersAge": 7
+            "symbol": 1,
+            "averageContainersAge": 1
         },
         "basis": "ceu",
         "list": [
@@ -20,23 +21,23 @@
                 "containersAgeFrom": 0,
                 "containersAgeTo": 3,
                 "symbol": 1,
-                "percent": 0
+                "percent": 1
             }
 
         ]
     },
     "weightedAge": {
         "average": {
-            "symbol": 0,
-            "averageWeighedAge": 3.75
+            "symbol": 1,
+            "averageWeighedAge": 1
         },
         "basis": "cost",
         "list": [
             {
                 "weightedAgeFrom": 0,
                 "weightedAgeTo": 7,
-                "symbol": 0,
-                "percent": 80
+                "symbol": 1,
+                "percent": 1
             }
         ]
     },
@@ -45,27 +46,22 @@
         "topLessee": {
             "top3": {
                 "symbol": 0,
-                "percent": 70
+                "percent": 90
             },
             "top1": {
                 "symbol": 0,
-                "percent": 50
+                "percent": 90
             },
             "top2": {
                 "symbol": 0,
-                "percent": 0
+                "percent": 90
             }
         },
         "others": {
             "lessee": [],
-            "percent": 10
+            "percent": 20
         },
         "list": [
-            {
-                "lessee": "MSC",
-                "symbol": 0,
-                "percent": 70
-            }
         ]
     },
     "status": {
@@ -74,17 +70,17 @@
             {
                 "statusType":"ON",
                 "symbol": 1,
-                "percent": 50
+                "percent": 1
             },
             {
                 "statusType":"OF",
                 "symbol": 0,
-                "percent": 50
+                "percent": 90
             },
             {
                 "statusType":"None",
                 "symbol": 0,
-                "percent": 30
+                "percent": 90
             }
         ]
     },
@@ -94,7 +90,7 @@
             {
                 "productType": ["D20", "D40", "D4H"],
                 "symbol": 1,
-                "percent": 50
+                "percent": 1
             }
         ]
     },
