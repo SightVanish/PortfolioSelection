@@ -80,11 +80,28 @@ def ConnectDatabase(queryID):
         exit(1)
     try:
         print('Data loading...')
-        sqlInput = """
-            select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
-            contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-            from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        """.format(queryID) 
+        # sqlInput = """
+        #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
+        #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+        #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
+        # """.format(queryID) 
+        sqlInput = \
+        """
+        select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
+        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+        from biz_model.biz_ads_fir_pkg_data p1
+        inner join 
+        (select contract_num, product
+        from(
+        select contract_num, product, count(*) num
+        from biz_model.biz_ads_fir_pkg_data
+        WHERE query_id='{1}'
+        group by 1, 2
+        ) p1 
+        where num >= {0}) p2
+        on p1.contract_num=p2.contract_num and p1.product=p2.product
+        WHERE query_id='{1}'
+        """.format(param["numContractProductLimit"], queryID)
         data = pd.read_sql(sqlInput, conn)
         if data.shape[0] == 0:
             raise Exception("No Data Available!")

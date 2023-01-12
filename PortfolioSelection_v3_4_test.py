@@ -98,7 +98,7 @@ def ConnectDatabase(queryID):
     where num >= {0}) p2
     on p1.contract_num=p2.contract_num and p1.product=p2.product
     WHERE query_id='{1}'
-    """.format(100, queryID)
+    """.format(param["numContractProductLimit"], queryID)
 
 
     data = pd.read_sql(sqlInput, conn)
