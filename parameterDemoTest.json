@@ -4,11 +4,11 @@
         "nbvorCost": 1
     }, 
     "timeLimit": 100, 
-    "totalNBVFrom": 100000, 
+    "totalNBVFrom": 10000000, 
     "totalNBVTo": 0, 
     "totalCostFrom": 0, 
     "totalCostTo": 0, 
-    "numContractProductLimit": 150,
+    "numContractProductLimit": 100,
     "containersAge": {
         "basis": "", 
         "average": {
@@ -26,14 +26,19 @@
         "list": []
     }, 
     "lessee": {
-        "basis": "nbv", 
+        "basis": "ceu", 
         "others": {
             "lessee": "", 
             "symbol": 0, 
-            "percent": 0
+            "percent": 10
         }, 
         "list": [
-            ], 
+            {
+                "lessee": "MSC",
+                "symbol": 0,
+                "percent": 50
+            }
+        ], 
         "allList": [], 
         "topLessee": {
             "top1": {

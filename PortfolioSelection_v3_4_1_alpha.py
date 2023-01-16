@@ -11,21 +11,7 @@ import uuid
 import cvxpy as cp
 import datetime
 import argparse
-"""
-Check before submit
-1. enable report status
-2. enable try...exception
-3. enable ouput package
-4. switch database 
-5. bug free
-TODO:
-1. add unit number constraints (contract number + product type)
-    1.1 add data: contract_num - code done
-    1.2 add parameter: numContractProductLimit = positive int or 0 (0--no limit)
-    1.3 modify build model - code done
-    1.4 modify validation part - code done
-    1.5 test all above
-"""
+
 INF = float('inf')
 total_time = time.time()
 
