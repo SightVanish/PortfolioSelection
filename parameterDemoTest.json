@@ -2,13 +2,21 @@
     "prefer": {
         "maxOrMin": 1, 
         "nbvorCost": 1
-    }, 
+    },
+    "objective": {
+        "objective": "product",
+        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product"],
+        "type": ["D20"],
+        "_type":"lessee name, product name, etc.",
+        "maxOrMin": "",
+        "value": 0.7
+    },
     "timeLimit": 100, 
-    "totalNBVFrom": 10000000, 
+    "totalNBVFrom": 100000, 
     "totalNBVTo": 0, 
     "totalCostFrom": 0, 
     "totalCostTo": 0, 
-    "numContractProductLimit": 100,
+    "numContractProductLimit": 10,
     "containersAge": {
         "basis": "", 
         "average": {
@@ -30,7 +38,7 @@
         "others": {
             "lessee": "", 
             "symbol": 0, 
-            "percent": 10
+            "percent": 0
         }, 
         "list": [
             {
@@ -51,10 +59,20 @@
             }, 
             "top3": {
                 "symbol": 0, 
-                "percent": 50
+                "percent": 0
             }
         }
     }, 
+    "country": {
+        "basis": "ceu",
+        "list": [
+            {
+                "country": ["China"],
+                "symbol": 0,
+                "percent": 15
+            }
+        ]
+    },
     "status": {
         "basis": "", 
         "list": [
