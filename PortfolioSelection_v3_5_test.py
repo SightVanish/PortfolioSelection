@@ -12,7 +12,7 @@ import cvxpy as cp
 import datetime
 import argparse
 
-debug = True # TODO: add this flag in dev version
+debug = True
 
 INF = float('inf')
 total_time = time.time()
@@ -20,7 +20,7 @@ total_time = time.time()
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
-queryID = "u4xf1eivepKM9EQHrefgK0"
+queryID = "Y5LydmSZDpqvVo3kQvZpz6"
 numLimit = 5
 threadLimit = 4
 if queryID is None:
@@ -32,9 +32,9 @@ def ReportStatus(msg, flag, queryID, output=None):
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
     sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}' where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID)
-    print("============================================================================================================================")
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")    
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(sql)
@@ -47,23 +47,21 @@ def ConnectDatabase(queryID):
     """
     print('Parameters reading...')
     sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")        
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     paramInput = pd.read_sql(sqlParameter, conn)
     if paramInput.shape[0] == 0:
         raise Exception("No Valid Query Request is Found!")
     elif paramInput.shape[0] > 1:
         raise Exception("More than One Valid Query Requests are Found!")
     param = json.loads(paramInput['python_json'][0])
-    # print(param)
+    print(param)
 
     print('Data loading...')
     # sqlInput = """
     #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
-    #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-    #     from fll_t_dw.biz_ads_fir_pkg_data WHERE query_id='{0}'
+    #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+    #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
     # """.format(queryID) 
-
-    param["numContractProductLimit"] = 150
     sqlInput = \
     """
     select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
@@ -74,32 +72,30 @@ def ConnectDatabase(queryID):
     from(
     select contract_num, product, count(*) num
     from fll_t_dw.biz_ads_fir_pkg_data
-    where query_id='{1}'
+    WHERE query_id='{1}'
     group by 1, 2
     ) p1 
     where num >= {0}) p2
     on p1.contract_num=p2.contract_num and p1.product=p2.product
-    where query_id='{1}'
+    WHERE query_id='{1}'
     """.format(param["numContractProductLimit"], queryID)
-
-
     data = pd.read_sql(sqlInput, conn)
     if data.shape[0] == 0:
         raise Exception("No Data Available!")
     print('Input data shape:', data.shape)
     conn.close()
 
-
     return param, data
 
 
 param, data = ConnectDatabase(queryID)
 
+param['country'] = {'basis': 'ceu', 'list': [{'country': ['China'], 'symbol': 0, 'percent': 80}]}
 # print('Data reading...')
 # data = pd.read_csv('./local_data.csv')
-print('Loading local json')
-with open("./parameterDemoTest.json") as f:
-    param = json.load(f)
+# print('Loading local json')
+# with open("./parameterDemoTest.json") as f:
+#     param = json.load(f)
 # queryID = "local_test_id"
 if debug:
     print("==============================================================")
@@ -284,7 +280,7 @@ try:
         product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
         contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
         rml.append(data['RML{0}'.format(i)].to_numpy() if rmlLimit[i] else None)
-        country.append(data['Country{0}'.format(i)].to_numpy() if rmlLimit[i] else None)
+        country.append(data['Country{0}'.format(i)].to_numpy() if countryLimit[i] else None)
     basis = {}
     basis['nbv'] = nbv
     basis['ceu'] = ceu
@@ -334,11 +330,11 @@ def BuildModel():
     if maxTotalCost:
         constraints.append(cp.sum(cp.multiply(x, cost)) <= maxTotalCost)
         if debug:
-            print('\Cost <= {0}'.format(maxTotalCost))
+            print('\tCost <= {0}'.format(maxTotalCost))
     if minTotalCost:
         constraints.append(cp.sum(cp.multiply(x, cost)) >= minTotalCost)
         if debug:
-            print('\Cost >= {0}'.format(minTotalCost))
+            print('\tCost >= {0}'.format(minTotalCost))
     # rent
     if minTotalRent:
         constraints.append(cp.sum(cp.multiply(x, rent)) >= minTotalRent)
@@ -522,7 +518,7 @@ except Exception as e:
 def ValidResult(result):
     reportJson = {}
     passed = True
-    print('======================================================================')
+    print("==============================================================")
     # NBV
     resultNbv = sum(result*nbv)
     print("nbv: {0}".format(round(resultNbv, 4)))
@@ -818,6 +814,7 @@ else:
             ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
         else:   
             passed, outputJson = ValidResult(result)
+            # OutputPackage(data, result, queryID)
             if passed:
                 ReportStatus('Algorithm Succeeded!', 'O', queryID, outputJson)
             else:

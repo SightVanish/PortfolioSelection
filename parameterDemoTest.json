@@ -5,7 +5,7 @@
     },
     "objective": {
         "objective": "product",
-        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product"],
+        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product","lesseeCountry","totalRent","totalRentDscr","remainingLeaseTenor","factory","cocCost","cocNbv"],
         "type": ["D20"],
         "_type":"lessee name, product name, etc.",
         "maxOrMin": "",
