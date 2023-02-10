@@ -4,19 +4,21 @@
         "nbvorCost": 1
     },
     "objective": {
-        "objective": "product",
-        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product","lesseeCountry","totalRent","totalRentDscr","remainingLeaseTenor","factory","cocCost","cocNbv"],
+        "objective": "coc",
+        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product","lesseeCountry","totalRent","totalRentDscr","remainingLeaseTenor","factory","coc"],
         "type": ["D20"],
         "_type":"lessee name, product name, etc.",
-        "maxOrMin": "",
-        "value": 0.7
+        "basis": "ceu",
+        "_basis": ["ceu", "teu", "cost", "nbv"],
+        "maxOrMin": 1,
+        "value": ""
     },
     "timeLimit": 100, 
-    "totalNBVFrom": 100000, 
+    "totalNBVFrom": 10000, 
     "totalNBVTo": 0, 
     "totalCostFrom": 0, 
     "totalCostTo": 0, 
-    "numContractProductLimit": 10,
+    "numContractProductLimit": 0,
     "containersAge": {
         "basis": "", 
         "average": {
@@ -34,7 +36,7 @@
         "list": []
     }, 
     "lessee": {
-        "basis": "ceu", 
+        "basis": "", 
         "others": {
             "lessee": "", 
             "symbol": 0, 
@@ -44,7 +46,7 @@
             {
                 "lessee": "MSC",
                 "symbol": 0,
-                "percent": 50
+                "percent": 90
             }
         ], 
         "allList": [], 
@@ -64,12 +66,12 @@
         }
     }, 
     "country": {
-        "basis": "ceu",
+        "basis": "",
         "list": [
             {
                 "country": ["China"],
                 "symbol": 0,
-                "percent": 15
+                "percent": 90
             }
         ]
     },
@@ -88,16 +90,12 @@
         "list": [
         ]
     }, 
-    "totalRentFrom": 1000, 
+    "totalRentFrom": 0, 
     "rml": {
-        "basis": "ceu", 
+        "basis": "", 
         "list": [
-            {
-                "rmlFrom": 1,
-                "rmlTo": "",
-                "symbol": 1,
-                "percent": 50
-            }
         ]
     }
 }
+
+

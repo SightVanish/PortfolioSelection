@@ -11,6 +11,7 @@ import uuid
 import cvxpy as cp
 import datetime
 import argparse
+from pandasql import sqldf
 
 INF = float('inf')
 total_time = time.time()
@@ -34,16 +35,18 @@ if queryID is None:
     print("No valid query id!")
     exit(1)
 
-def ReportStatus(msg, flag, queryID, output=None):
+def ReportStatus(msg, flag, queryID, query_version, output=None):
     """
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version=2 where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version={5} where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID, query_version)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
     cur = conn.cursor()
+    cur.execute(sql)
+    sql = "update fll_t_dw.biz_fir_third_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version={5} where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID, query_version)
     cur.execute(sql)
     conn.commit()
     conn.close()
@@ -54,7 +57,7 @@ def ConnectDatabase(queryID):
     """
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+        sqlParameter = "select query_id, query_based_version, query_version, python_json from fll_t_dw.biz_fir_third_parameter_definition where id='{0}'".format(queryID)
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
@@ -62,42 +65,57 @@ def ConnectDatabase(queryID):
         elif paramInput.shape[0] > 1:
             raise Exception("More than One Valid Query Requests are Found!")
         param = json.loads(paramInput['python_json'][0])
-        print(param)
+        data_query_id = paramInput['query_id'][0]
+        query_based_verion = paramInput['query_based_version'][0]
+        query_version = paramInput['query_version'][0]
+        print("base version: {0}\ncurrent version: {1}\nobjective: {2}".format(query_based_verion, query_version, param["objective"]))
     except Exception as e:
         print("Loading Parameters from GreenPlum Failed!\n", e)
         exit(1)
     try:
         print('Data loading...')
+        # sqlInput = """
+        #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
+        #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+        #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
+        # """.format(queryID) 
         sqlInput = \
+        """
+        select billing_status_fz, unit_id_fz, product, fleet_year_fz, contract_cust_id, contract_num,
+        contract_lease_type, cost, nbv, age_x_ceu, ceu_fz, teu_fz, rent, rml_x_ceu_c, cust_country, per_diem_rate_current
+        from fll_t_dw.biz_ads_fir_pkg_data
+        where unit_id_fz in
+        (select unit_id
+        from fll_t_dw.biz_fir_asset_package
+        where query_version = {0}
+        and query_id = '{1}')
+        """.format(query_based_verion, data_query_id)
+        data = pd.read_sql(sqlInput, conn)
+        print("Executing pandas SQL...")
+        pysqldf = lambda q: sqldf(q, globals())
+        q = \
         """
         select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
         contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
-        from fll_t_dw.biz_ads_fir_pkg_data p1
+        from data p1
         inner join 
         (select contract_num, product
-        from(
-        select contract_num, product, count(*) num
-        from fll_t_dw.biz_ads_fir_pkg_data
-        WHERE query_id='{1}'
-        group by 1, 2
-        ) p1 
+        from (select contract_num, product, count(*) num from data group by 1, 2) p1 
         where num >= {0}) p2
         on p1.contract_num=p2.contract_num and p1.product=p2.product
-        WHERE query_id='{1}'
-        """.format(param["numContractProductLimit"], queryID)
-        data = pd.read_sql(sqlInput, conn)
+        """.format(param["numContractProductLimit"])
+        data = pysqldf(q)
         if data.shape[0] == 0:
-            raise Exception("No Data Available!")
+            raise Exception("No Data Available in GreenPlum!")
         print('Input data shape:', data.shape)
         conn.close()
     except Exception as e:
         print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
+        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
+    return param, data, query_version
 
-    return param, data
-
-def OutputPackage(data, result, queryID):
+def OutputPackage(data, result, queryID, query_version):
     """
     Output final package to biz_model.biz_fir_asset_package.
     """
@@ -110,16 +128,16 @@ def OutputPackage(data, result, queryID):
         values_list = []
         for i in range(len(result)):
             if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0, 2))
+                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0, query_version))
         psycopg2.extras.execute_values(cur, sqlOutput, values_list)
         conn.commit()
         conn.close()
     except Exception as e:
         print(e) 
-        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
+        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
 
-param, data = ConnectDatabase(queryID)
+param, data, query_version = ConnectDatabase(queryID)
 
 if debug:
     print("==============================================================")
@@ -135,6 +153,14 @@ try:
     numContractProductLimit = param['numContractProductLimit']
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
+
+    # objective
+    objectiveTarget = param['objective']['objective']
+    objectiveType = param['objective']['type']
+    objectiveMaxOrMin = param['objective']['maxOrMin']
+    objectiveValue = param['objective']['value']
+    objectiveBasis = param['objective']['basis']
+
     fleetAgeLowBound = [-INF for _ in range(numLimit)]
     fleetAgeUpBound = [INF for _ in range(numLimit)]
     fleetAgeLimit = [None for _ in range(numLimit)]
@@ -240,8 +266,9 @@ try:
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
-    ReportStatus(msg, 'F', queryID)
+    ReportStatus(msg, 'F', queryID, query_version)
     exit(1)
+
 print("==============================================================")
 print('Data processing...')
 try:
@@ -317,7 +344,7 @@ try:
 except Exception as e:
     print(e)
     msg = 'Processing Data Failed!' + str(e)
-    ReportStatus(msg, 'F', queryID)
+    ReportStatus(msg, 'F', queryID, query_version)
     exit(1)
 
 def BuildModel():
@@ -326,21 +353,176 @@ def BuildModel():
     start_time = time.time()
  
     x = cp.Variable(shape=data.shape[0], boolean=True)
+    y = cp.Variable(shape=data.shape[0])
+    t = cp.Variable(shape=1)
+    constraints = []
 
     # objective function 
-    if NbvCost:
-        obj = cp.sum(cp.multiply(x, nbv))
-    else:
-        obj = cp.sum(cp.multiply(x, cost))
-    if maxOrMin:
-        objective = cp.Maximize(obj)
-    else:
-        objective = cp.Minimize(obj)
-    if debug:
-        print('\tObjective is to {0} {1}'.format('maximize' if maxOrMin else 'minmize', 'NBV' if NbvCost else 'COST'))
+    if objectiveTarget == 'containerAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(y @ fleetAgeAvg))
+        else:
+            objective = cp.Minimize(cp.sum(y @ fleetAgeAvg))
+        constraints.append(cp.sum(y) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] <= 1*x[i])
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
 
-    # constraints
-    constraints = []
+    elif objectiveTarget == 'weightedAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(y @ weightedAgeAvg))
+        else:
+            objective = cp.Minimize(cp.sum(y @ weightedAgeAvg))
+        constraints.append(cp.sum(y @ ceu) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] <= 1*x[i])
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'lessee':
+        if objectiveValue:
+            objective = cp.Minimize(t)
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((lesseeOneHot[objectiveType[0]] - objectiveValue * basis[objectiveBasis] / 100) @ x))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((-lesseeOneHot[objectiveType[0]] + objectiveValue * basis[objectiveBasis] / 100) @ x))
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(t - y[i] <= 1*(1-x[i]))
+                constraints.append(t - y[i] >= 0)
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(y @ lesseeOneHot[objectiveType[0]]))
+            else:
+                objective = cp.Minimize(cp.sum(y @ lesseeOneHot[objectiveType[0]]))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'onHire':
+        if objectiveValue:
+            objective = cp.Minimize(t)
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((onHireStatus - objectiveValue * basis[objectiveBasis] / 100) @ x))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((-onHireStatus + objectiveValue * basis[objectiveBasis] / 100) @ x))
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(t - y[i] <= 1*(1-x[i]))
+                constraints.append(t - y[i] >= 0)
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(y @ onHireStatus))
+            else:
+                objective = cp.Minimize(cp.sum(y @ onHireStatus))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'product':
+        objectiveProduct = data['product'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveValue:
+            objective = cp.Minimize(t)
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((objectiveProduct - objectiveValue * basis[objectiveBasis] / 100) @ x))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((-objectiveProduct + objectiveValue * basis[objectiveBasis] / 100) @ x))
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(t - y[i] <= 1*(1-x[i]))
+                constraints.append(t - y[i] >= 0)
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(y @ objectiveProduct))
+            else:
+                objective = cp.Minimize(cp.sum(y @ objectiveProduct))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'lesseeCountry':
+        objectiveCountry = data['cust_country'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(y @ objectiveCountry))
+        else:
+            objective = cp.Minimize(cp.sum(y @ objectiveCountry))
+        constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] <= 1*x[i])
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'totalRent':
+        pass
+
+    elif objectiveTarget == 'totalRentDscr':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(x @ rent))
+        else:
+            objective = cp.Minimize(cp.sum(x @ rent))
+
+    elif objectiveTarget == 'remainingLeaseTenor':
+        objectiveRML = data['rml'].to_numpy()
+        if objectiveValue:
+            objective = cp.Minimize(t)
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((objectiveRML - objectiveValue * basis[objectiveBasis] / 100) @ x))
+            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((-objectiveRML + objectiveValue * basis[objectiveBasis] / 100) @ x))
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(t - y[i] <= 1*(1-x[i]))
+                constraints.append(t - y[i] >= 0)
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(y @ objectiveRML))
+            else:
+                objective = cp.Minimize(cp.sum(y @ objectiveRML))
+            
+            constraints.append(cp.sum(y @ ceu) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] <= 1*x[i])
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'factory':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(y @ noneHireStatus))
+        else:
+            objective = cp.Minimize(cp.sum(y @ noneHireStatus))
+        constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] <= 1*x[i])
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'coc':
+        pdr = data['pdr'].to_numpy() * 365
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(y @ pdr))
+        else:
+            objective = cp.Minimize(cp.sum(y @ pdr))
+        constraints.append(cp.sum(y @ basis[objectiveBasis]) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] <= 1*x[i])
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    else:
+        raise ValueError('objective is not expected: {0}'.format(objective))
+
     # nbv
     if maxTotalNbv:
         constraints.append(cp.sum(cp.multiply(x, nbv)) <= maxTotalNbv)
@@ -523,7 +705,7 @@ def SolveModel(prob, timeLimit, threadLimit):
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.CBC, verbose=False, maximumSeconds=timeLimit, numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=1, )
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
@@ -532,10 +714,21 @@ def SolveModel(prob, timeLimit, threadLimit):
 
 try:
     prob, x = BuildModel()
-    prob = SolveModel(prob, timeLimit, threadLimit)
+    x.value = np.ones(shape=len(data))
+    start_time = time.time()
+    print("==============================================================")
+    print('Model solving...')
+    # solve model
+    # prob.solve(solver='CBC', warm_start=True, verbose=0, qcp=1, max_iters=10)
+    prob.solve(solver=cp.CBC, verbose=0, maximumSeconds=timeLimit, numberThreads=threadLimit)
+
+    print("==============================================================")
+    print("status:", prob.status)
+    print("==============================================================")
+    print('Time Cost', time.time() - start_time)
 except Exception as e:
     print(e)
-    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID)
+    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID, query_version)
     exit(1)
 
 
@@ -825,8 +1018,9 @@ def ValidResult(result):
         print('Algorithm Succeeded!!!!!!!!!!!!!!!!')
     return passed, json.dumps(reportJson)
 
+
 if prob.status == 'infeasible':
-    ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID)
+    ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID, query_version)
 else:
     try:
         result = x.value
@@ -835,17 +1029,17 @@ else:
         print(int(sum(result)), '/', len(result), 'containers are selected.')
 
         if int(sum(result)) == 0:
-            ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
+            ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID, query_version)
         else:   
             passed, outputJson = ValidResult(result)
-            OutputPackage(data, result, queryID)
+            OutputPackage(data, result, queryID, query_version)
             if passed:
-                ReportStatus('Algorithm Succeeded!', 'O', queryID, outputJson)
+                ReportStatus('Algorithm Succeeded!', 'O', queryID, query_version, outputJson)
             else:
-                ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID, outputJson)
+                ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID, query_version, outputJson)
     except Exception as e:
         print(e)
-        ReportStatus('Result Validation Failed!', 'F', queryID)
+        ReportStatus('Result Validation Failed!', 'F', queryID, query_version)
         exit(1)
 
 print('Total Time Cost:', time.time() - total_time)

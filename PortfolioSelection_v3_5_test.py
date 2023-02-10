@@ -21,6 +21,7 @@ if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
 queryID = "Y5LydmSZDpqvVo3kQvZpz6"
+# queryID = "u4xf1eivepKM9EQHrefgK0"
 numLimit = 5
 threadLimit = 4
 if queryID is None:
@@ -65,7 +66,7 @@ def ConnectDatabase(queryID):
     sqlInput = \
     """
     select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
-    contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml, cust_country
+    contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country, per_diem_rate_current as pdr
     from fll_t_dw.biz_ads_fir_pkg_data p1
     inner join 
     (select contract_num, product
@@ -78,7 +79,7 @@ def ConnectDatabase(queryID):
     where num >= {0}) p2
     on p1.contract_num=p2.contract_num and p1.product=p2.product
     WHERE query_id='{1}'
-    """.format(param["numContractProductLimit"], queryID)
+    """.format(10, queryID)
     data = pd.read_sql(sqlInput, conn)
     if data.shape[0] == 0:
         raise Exception("No Data Available!")
@@ -87,16 +88,11 @@ def ConnectDatabase(queryID):
 
     return param, data
 
-
 param, data = ConnectDatabase(queryID)
 
-param['country'] = {'basis': 'ceu', 'list': [{'country': ['China'], 'symbol': 0, 'percent': 80}]}
-# print('Data reading...')
-# data = pd.read_csv('./local_data.csv')
-# print('Loading local json')
-# with open("./parameterDemoTest.json") as f:
-#     param = json.load(f)
-# queryID = "local_test_id"
+print('Loading local json')
+with open("./parameterDemoTest.json") as f:
+    param = json.load(f)
 if debug:
     print("==============================================================")
     print(param)
@@ -111,6 +107,14 @@ try:
     numContractProductLimit = param['numContractProductLimit']
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
+
+    # objective
+    objectiveTarget = param['objective']['objective']
+    objectiveType = param['objective']['type']
+    objectiveMaxOrMin = param['objective']['maxOrMin']
+    objectiveValue = param['objective']['value']
+    objectiveBasis = param['objective']['basis']
+
     fleetAgeLowBound = [-INF for _ in range(numLimit)]
     fleetAgeUpBound = [INF for _ in range(numLimit)]
     fleetAgeLimit = [None for _ in range(numLimit)]
@@ -302,21 +306,219 @@ def BuildModel():
     start_time = time.time()
  
     x = cp.Variable(shape=data.shape[0], boolean=True)
+    y = cp.Variable(shape=data.shape[0])
+    t = cp.Variable(shape=1)
+    z = cp.Variable(shape=1, boolean=True)
+    constraints = []
 
     # objective function 
-    if NbvCost:
-        obj = cp.sum(cp.multiply(x, nbv))
-    else:
-        obj = cp.sum(cp.multiply(x, cost))
-    if maxOrMin:
-        objective = cp.Maximize(obj)
-    else:
-        objective = cp.Minimize(obj)
-    if debug:
-        print('\tObjective is to {0} {1}'.format('maximize' if maxOrMin else 'minmize', 'NBV' if NbvCost else 'COST'))
+    if objectiveTarget == 'containerAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, fleetAgeAvg)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, fleetAgeAvg)))
+            
+        constraints.append(cp.sum(y) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'weightedAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, weightedAgeAvg)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, weightedAgeAvg)))
 
-    # constraints
-    constraints = []
+        constraints.append(cp.sum(cp.multiply(y, ceu)) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'lessee':
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'onHire':
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, onHireStatus)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, onHireStatus)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, onHireStatus)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, onHireStatus)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, onHireStatus)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, onHireStatus)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'product':
+        objectiveProduct = data['product'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, objectiveProduct)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, objectiveProduct)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, objectiveProduct)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, objectiveProduct)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveProduct)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveProduct)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'lesseeCountry':
+        objectiveCountry = data['cust_country'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveCountry)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveCountry)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'totalRent':
+        pass
+    elif objectiveTarget == 'totalRentDscr':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, rent)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, rent)))
+        pass
+    elif objectiveTarget == 'remainingLeaseTenor':
+        objectiveRML = data['rml'].to_numpy()
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, objectiveRML)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, objectiveRML)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, objectiveRML)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, objectiveRML)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveRML)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveRML)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'factory':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, noneHireStatus)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, noneHireStatus)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'coc':
+        pdr = data['pdr'].to_numpy()
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, pdr)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, pdr)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    else:
+        raise ValueError('objective is not expected: {0}'.format(objective))
+
     # nbv
     if maxTotalNbv:
         constraints.append(cp.sum(cp.multiply(x, nbv)) <= maxTotalNbv)
@@ -499,7 +701,7 @@ def SolveModel(prob, timeLimit, threadLimit):
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.CBC, verbose=False, maximumSeconds=timeLimit, numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=1, maximumSeconds=timeLimit, numberThreads=threadLimit)
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
@@ -551,7 +753,10 @@ def ValidResult(result):
         if (minTotalCost - resultRent) > 0.1:
             passed = False
             print('\tmin failed')
+
     # Fleet Age
+    if objectiveTarget == 'containerAge':
+        print('container average age is {0}'.format(round(sum(result*fleetAgeAvg)/sum(result), 4)))
     if fleetAgeAvgLimit:
         resultFleetAgeAvg = sum(result*fleetAgeAvg)/sum(result)
         print('container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
@@ -814,7 +1019,7 @@ else:
             ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
         else:   
             passed, outputJson = ValidResult(result)
-            # OutputPackage(data, result, queryID)
+            # OutputPackage(data, result, queryID, query_version)
             if passed:
                 ReportStatus('Algorithm Succeeded!', 'O', queryID, outputJson)
             else:
