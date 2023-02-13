@@ -74,11 +74,6 @@ def ConnectDatabase(queryID):
         exit(1)
     try:
         print('Data loading...')
-        # sqlInput = """
-        #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
-        #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-        #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        # """.format(queryID) 
         sqlInput = \
         """
         select billing_status_fz, unit_id_fz, product, fleet_year_fz, contract_cust_id, contract_num,
@@ -90,24 +85,10 @@ def ConnectDatabase(queryID):
         where query_version = {0}
         and query_id = '{1}')
         """.format(query_based_verion, data_query_id)
-        data = pd.read_sql(sqlInput, conn)
-        print("Executing pandas SQL...")
-        pysqldf = lambda q: sqldf(q, globals())
-        q = \
-        """
-        select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
-        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
-        from data p1
-        inner join 
-        (select contract_num, product
-        from (select contract_num, product, count(*) num from data group by 1, 2) p1 
-        where num >= {0}) p2
-        on p1.contract_num=p2.contract_num and p1.product=p2.product
-        """.format(param["numContractProductLimit"])
-        data = pysqldf(q)
+        data = pd.read_sql(sqlInput, conn)    
         if data.shape[0] == 0:
             raise Exception("No Data Available in GreenPlum!")
-        print('Input data shape:', data.shape)
+        print('Raw data shape:', data.shape)
         conn.close()
     except Exception as e:
         print(e)
@@ -138,6 +119,26 @@ def OutputPackage(data, result, queryID, query_version):
         exit(1)
 
 param, data, query_version = ConnectDatabase(queryID)
+try:
+    print("Executing Pandas SQL...")
+    pysqldf = lambda q: sqldf(q, globals())
+    q = \
+    """
+    select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
+    contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
+    from data p1
+    inner join 
+    (select contract_num, product
+    from (select contract_num, product, count(*) num from data group by 1, 2) p1 
+    where num >= {0}) p2
+    on p1.contract_num=p2.contract_num and p1.product=p2.product
+    """.format(param["numContractProductLimit"])
+    data = pysqldf(q)
+    print('Input data shape:', data.shape)
+except Exception as e:
+    print(e)
+    ReportStatus("Executing Pandas SQL Failed!", 'F', queryID, query_version)
+    exit(1)
 
 if debug:
     print("==============================================================")
@@ -475,8 +476,8 @@ def BuildModel():
         objectiveRML = data['rml'].to_numpy()
         if objectiveValue:
             objective = cp.Minimize(t)
-            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((objectiveRML - objectiveValue * basis[objectiveBasis] / 100) @ x))
-            constraints.append(cp.sum(y @ basis[objectiveBasis]) >= cp.sum((-objectiveRML + objectiveValue * basis[objectiveBasis] / 100) @ x))
+            constraints.append(cp.sum(y @ ceu) >= cp.sum((objectiveRML - objectiveValue * ceu / 100) @ x))
+            constraints.append(cp.sum(y @ ceu) >= cp.sum((-objectiveRML + objectiveValue * ceu / 100) @ x))
             for i in range(data.shape[0]):
                 constraints.append(y[i] >= 0)
                 constraints.append(y[i] <= 1*x[i])
@@ -700,18 +701,6 @@ def BuildModel():
 
     return prob, x
 
-def SolveModel(prob, timeLimit, threadLimit):
-    start_time = time.time()
-    print("==============================================================")
-    print('Model solving...')
-    # solve model
-    prob.solve(solver=cp.CBC, verbose=1, )
-    print("==============================================================")
-    print("status:", prob.status)
-    print("==============================================================")
-    print('Time Cost', time.time() - start_time)
-    return prob
-
 try:
     prob, x = BuildModel()
     x.value = np.ones(shape=len(data))
@@ -719,9 +708,7 @@ try:
     print("==============================================================")
     print('Model solving...')
     # solve model
-    # prob.solve(solver='CBC', warm_start=True, verbose=0, qcp=1, max_iters=10)
-    prob.solve(solver=cp.CBC, verbose=0, maximumSeconds=timeLimit, numberThreads=threadLimit)
-
+    prob.solve(solver=cp.CBC, verbose=0, warm_start=True, maximumSeconds=timeLimit, numberThreads=threadLimit)
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
