@@ -12,22 +12,18 @@ import cvxpy as cp
 import datetime
 import argparse
 
+debug = True
+
 INF = float('inf')
 total_time = time.time()
 
 if sys.version_info[0:2] != (3, 6):
     warnings.warn('Please use Python3.6', UserWarning)
 
-parser = argparse.ArgumentParser(description="Flornes porfolio selection model")
-parser.add_argument('--queryID', '-id', type=str, help='Query ID')
-parser.add_argument('--numLimit', '-n', type=int, default=5, help='Maximum number of constraints in each condition')
-parser.add_argument('--threadLimit', '-t', type=int, default=4, help='Maximum number of threads')
-args = parser.parse_args().__dict__
-numLimit = args['numLimit']
-threadLimit = args['threadLimit']
-queryID = args['queryID']
-print('Input argparse',  args)
-
+queryID = "Y5LydmSZDpqvVo3kQvZpz6"
+# queryID = "u4xf1eivepKM9EQHrefgK0"
+numLimit = 5
+threadLimit = 4
 if queryID is None:
     print("No valid query id!")
     exit(1)
@@ -36,10 +32,10 @@ def ReportStatus(msg, flag, queryID, output=None):
     """
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update biz_model.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}' where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID)
-    print("============================================================================================================================")
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}' where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID)
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(sql)
@@ -50,98 +46,75 @@ def ConnectDatabase(queryID):
     """
     Load parameters in JSON from biz_model.biz_fir_query_parameter_definition and load data from biz_model.biz_ads_fir_pkg_data.
     """
-    try:
-        print('Parameters reading...')
-        sqlParameter = "select python_json from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
-        paramInput = pd.read_sql(sqlParameter, conn)
-        if paramInput.shape[0] == 0:
-            raise Exception("No Valid Query Request is Found!")
-        elif paramInput.shape[0] > 1:
-            raise Exception("More than One Valid Query Requests are Found!")
-        param = json.loads(paramInput['python_json'][0])
-        print(param)
-    except Exception as e:
-        print("Loading Parameters from GreenPlum Failed!\n", e)
-        exit(1)
-    try:
-        print('Data loading...')
-        # sqlInput = """
-        #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
-        #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-        #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
-        # """.format(queryID) 
-        sqlInput = \
-        """
-        select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
-        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
-        from biz_model.biz_ads_fir_pkg_data p1
-        inner join 
-        (select contract_num, product
-        from(
-        select contract_num, product, count(*) num
-        from biz_model.biz_ads_fir_pkg_data
-        WHERE query_id='{1}'
-        group by 1, 2
-        ) p1 
-        where num >= {0}) p2
-        on p1.contract_num=p2.contract_num and p1.product=p2.product
-        WHERE query_id='{1}'
-        """.format(param["numContractProductLimit"], queryID)
-        data = pd.read_sql(sqlInput, conn)
-        if data.shape[0] == 0:
-            raise Exception("No Data Available!")
-        print('Input data shape:', data.shape)
-        conn.close()
-    except Exception as e:
-        print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
-        exit(1)
+    print('Parameters reading...')
+    sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    paramInput = pd.read_sql(sqlParameter, conn)
+    if paramInput.shape[0] == 0:
+        raise Exception("No Valid Query Request is Found!")
+    elif paramInput.shape[0] > 1:
+        raise Exception("More than One Valid Query Requests are Found!")
+    param = json.loads(paramInput['python_json'][0])
+    print(param)
+
+    print('Data loading...')
+    # sqlInput = """
+    #     select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num as contract_num, \
+    #     contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, query_id, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu as rml
+    #     from biz_model.biz_ads_fir_pkg_data WHERE query_id='{0}'
+    # """.format(queryID) 
+    sqlInput = \
+    """
+    select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
+    contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country, per_diem_rate_current as pdr
+    from fll_t_dw.biz_ads_fir_pkg_data p1
+    inner join 
+    (select contract_num, product
+    from(
+    select contract_num, product, count(*) num
+    from fll_t_dw.biz_ads_fir_pkg_data
+    WHERE query_id='{1}'
+    group by 1, 2
+    ) p1 
+    where num >= {0}) p2
+    on p1.contract_num=p2.contract_num and p1.product=p2.product
+    WHERE query_id='{1}'
+    """.format(10, queryID)
+    data = pd.read_sql(sqlInput, conn)
+    if data.shape[0] == 0:
+        raise Exception("No Data Available!")
+    print('Input data shape:', data.shape)
+    conn.close()
 
     return param, data
 
-def OutputPackage(data, result, queryID):
-    """
-    Output final package to biz_model.biz_fir_asset_package.
-    """
-    sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version) values %s"
-    try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
-        conn.autocommit = True
-        cur = conn.cursor()
-        print('Writing data...')
-        values_list = []
-        for i in range(len(result)):
-            if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0))
-        psycopg2.extras.execute_values(cur, sqlOutput, values_list)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(e) 
-        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
-        exit(1)
-
 param, data = ConnectDatabase(queryID)
 
-# print('Data reading...')
-# data = pd.read_csv('./local_data.csv')
-# print('Parameter loading...')
-# with open("./parameterDemoTest.json") as f:
-#     param = json.load(f)
-# queryID = "local_test_id"
-# print("==============================================================")
-# print(param)
-# print(data.shape)
+print('Loading local json')
+with open("./parameterDemoTest.json") as f:
+    param = json.load(f)
+if debug:
+    print("==============================================================")
+    print(param)
+    print(data.shape)
 
 print("==============================================================")
 print('Parameters parsing...')
 try:
     timeLimit = param['timeLimit'] if param['timeLimit'] > 0 else 600
-    print('model time limit:', timeLimit)
+    if debug:
+        print('model time limit:', timeLimit)
     numContractProductLimit = param['numContractProductLimit']
     NbvCost = param['prefer']['nbvorCost']
     maxOrMin = param['prefer']['maxOrMin']
+
+    # objective
+    objectiveTarget = param['objective']['objective']
+    objectiveType = param['objective']['type']
+    objectiveMaxOrMin = param['objective']['maxOrMin']
+    objectiveValue = param['objective']['value']
+    objectiveBasis = param['objective']['basis']
+
     fleetAgeLowBound = [-INF for _ in range(numLimit)]
     fleetAgeUpBound = [INF for _ in range(numLimit)]
     fleetAgeLimit = [None for _ in range(numLimit)]
@@ -166,6 +139,9 @@ try:
     rmlUpBound = [INF for _ in range(numLimit)]
     rmlGeq = [None for _ in range(numLimit)]
     rmlLimit = [None for _ in range(numLimit)]
+    countryName = [None for _ in range(numLimit)]
+    countryGeq = [None for _ in range(numLimit)]
+    countryLimit = [None for _ in range(numLimit)]
 
     minTotalNbv = param['totalNBVFrom']
     maxTotalNbv = param['totalNBVTo']
@@ -235,12 +211,17 @@ try:
         # rmlUpBound[i] = param['rml']['list'][i]['rmlTo']
         rmlGeq[i] = param['rml']['list'][i]['symbol']
         rmlLimit[i] = param['rml']['list'][i]['percent'] / 100
+
+    countryBasis = param['country']['basis']
+    for i in range(len(param['country']['list'])):
+        countryName[i] = param['country']['list'][i]['country']
+        countryGeq[i] = param['country']['list'][i]['symbol']
+        countryLimit[i] = param['country']['list'][i]['percent'] / 100
 except Exception as e:
     print(e)
     msg = 'Parsing Paramters Failed! ' + str(e)
     ReportStatus(msg, 'F', queryID)
     exit(1)
-
 print("==============================================================")
 print('Data processing...')
 try:
@@ -260,25 +241,22 @@ try:
     for i in range(numLimit):
         # Container Age
         if fleetAgeLimit[i]:
-            column_name = 'FleetAge{0}'.format(i)
-            data[column_name] = data['fleet_year'].apply(lambda x: 1 if fleetAgeLowBound[i]<=x<=fleetAgeUpBound[i] else 0)
+            data['FleetAge{0}'.format(i)] = data['fleet_year'].apply(lambda x: 1 if fleetAgeLowBound[i]<=x<=fleetAgeUpBound[i] else 0)
         # Weighted Age
         if weightedAgeLimit[i]:
-            column_name = 'WeightedAge{0}'.format(i)
-            data[column_name] = data['weighted_age'].apply(lambda x: 1 if weightedAgeLowBound[i]<=x<=weightedAgeUpBound[i] else 0)
+            data['WeightedAge{0}'.format(i)] = data['weighted_age'].apply(lambda x: 1 if weightedAgeLowBound[i]<=x<=weightedAgeUpBound[i] else 0)
         # Product Type
         if productLimit[i]:
-            column_name = 'ProductType{0}'.format(i)
-            data[column_name] = data['product'].apply(lambda x: 1 if x in productType[i] else 0)
+            data['ProductType{0}'.format(i)] = data['product'].apply(lambda x: 1 if x in productType[i] else 0)
         # Contract Type
         if contractLimit[i]:
-            column_name = 'ContractType{0}'.format(i)
-            data[column_name] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
+            data['ContractType{0}'.format(i)] = data['contract'].apply(lambda x: 1 if x in contractType[i] else 0)
         # RML
         if rmlLimit[i]:
-            column_name = 'RML{0}'.format(i)
-            data[column_name] = data['rml'].apply(lambda x: 1 if rmlLowBound[i]<=x<=rmlUpBound[i] else 0)
-
+            data['RML{0}'.format(i)] = data['rml'].apply(lambda x: 1 if rmlLowBound[i]<=x<=rmlUpBound[i] else 0)
+        # Country
+        if countryLimit[i]:
+            data['Country{0}'.format(i)] = data['cust_country'].apply(lambda x: 1 if x in countryName[i] else 0)
     # convert data to numpy
     nbv = data['nbv'].to_numpy()
     cost = data['cost'].to_numpy()
@@ -298,6 +276,7 @@ try:
     product = []
     contract = []
     rml = []
+    country = []
 
     for i in range(numLimit):
         fleetAge.append(data['FleetAge{0}'.format(i)].to_numpy() if fleetAgeLimit[i] else None)
@@ -305,6 +284,7 @@ try:
         product.append(data['ProductType{0}'.format(i)].to_numpy() if productLimit[i] else None)
         contract.append(data['ContractType{0}'.format(i)].to_numpy() if contractLimit[i] else None)
         rml.append(data['RML{0}'.format(i)].to_numpy() if rmlLimit[i] else None)
+        country.append(data['Country{0}'.format(i)].to_numpy() if countryLimit[i] else None)
     basis = {}
     basis['nbv'] = nbv
     basis['ceu'] = ceu
@@ -324,45 +304,248 @@ def BuildModel():
     print("==============================================================")
     print('Model preparing...')
     start_time = time.time()
-
+ 
     x = cp.Variable(shape=data.shape[0], boolean=True)
-    # objective function 
-    if NbvCost:
-        print('Set Nbv as target', end=' ')
-        obj = cp.sum(cp.multiply(x, nbv))
-    else:
-        print('Set Cost as target', end=' ')
-        obj = cp.sum(cp.multiply(x, cost))
-        
-    if maxOrMin:
-        print('Max')
-        objective = cp.Maximize(obj)
-    else:
-        print('Min')
-        objective = cp.Minimize(obj)
-
-    # constraints
+    y = cp.Variable(shape=data.shape[0])
+    t = cp.Variable(shape=1)
+    z = cp.Variable(shape=1, boolean=True)
     constraints = []
+
+    # objective function 
+    if objectiveTarget == 'containerAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, fleetAgeAvg)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, fleetAgeAvg)))
+            
+        constraints.append(cp.sum(y) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'weightedAge':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, weightedAgeAvg)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, weightedAgeAvg)))
+
+        constraints.append(cp.sum(cp.multiply(y, ceu)) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'lessee':
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, lesseeOneHot[objectiveType[0]])))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'onHire':
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, onHireStatus)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, onHireStatus)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, onHireStatus)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, onHireStatus)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, onHireStatus)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, onHireStatus)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'product':
+        objectiveProduct = data['product'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, objectiveProduct)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, objectiveProduct)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, objectiveProduct)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, objectiveProduct)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveProduct)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveProduct)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'lesseeCountry':
+        objectiveCountry = data['cust_country'].apply(lambda x: 1 if x in objectiveType else 0).to_numpy()
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveCountry)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveCountry)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'totalRent':
+        pass
+    elif objectiveTarget == 'totalRentDscr':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, rent)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, rent)))
+        pass
+    elif objectiveTarget == 'remainingLeaseTenor':
+        objectiveRML = data['rml'].to_numpy()
+        if objectiveValue:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(z)
+                constraints.append(z <= cp.sum(cp.multiply(y, objectiveRML)) - objectiveValue/100)
+                constraints.append(z <= objectiveValue/100 - cp.sum(cp.multiply(y, objectiveRML)))
+
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+            else:
+                objective = cp.Minimize(z)
+                constraints.append(z >= cp.sum(cp.multiply(y, objectiveRML)) - objectiveValue)
+                constraints.append(z >= objectiveValue - cp.sum(cp.multiply(y, objectiveRML)))
+                
+                constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+                for i in range(data.shape[0]):
+                    constraints.append(y[i] >= 0)
+                    constraints.append(y[i] - t <= 1*(1-x[i]))
+                    constraints.append(y[i] - t >= 1*(x[i]-1))
+        else:
+            if objectiveMaxOrMin:
+                objective = cp.Maximize(cp.sum(cp.multiply(y, objectiveRML)))
+            else:
+                objective = cp.Minimize(cp.sum(cp.multiply(y, objectiveRML)))
+            
+            constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+            for i in range(data.shape[0]):
+                constraints.append(y[i] >= 0)
+                constraints.append(y[i] - t <= 1*(1-x[i]))
+                constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    elif objectiveTarget == 'factory':
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, noneHireStatus)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, noneHireStatus)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+    elif objectiveTarget == 'coc':
+        pdr = data['pdr'].to_numpy()
+        if objectiveMaxOrMin:
+            objective = cp.Maximize(cp.sum(cp.multiply(y, pdr)))
+        else:
+            objective = cp.Minimize(cp.sum(cp.multiply(y, pdr)))
+        
+        constraints.append(cp.sum(cp.multiply(y, basis[objectiveBasis])) == 1)
+        for i in range(data.shape[0]):
+            constraints.append(y[i] >= 0)
+            constraints.append(y[i] - t <= 1*(1-x[i]))
+            constraints.append(y[i] - t >= 1*(x[i]-1))
+
+    else:
+        raise ValueError('objective is not expected: {0}'.format(objective))
+
     # nbv
     if maxTotalNbv:
         constraints.append(cp.sum(cp.multiply(x, nbv)) <= maxTotalNbv)
-        print('Set Max Nbv')
+        if debug:
+            print('\tNBV <= {0}'.format(maxTotalNbv))
     if minTotalNbv:
         constraints.append(cp.sum(cp.multiply(x, nbv)) >= minTotalNbv)
-        print('Set Min Nbv')
+        if debug:
+            print('\tNBV >= {0}'.format(minTotalNbv))
     # cost
     if maxTotalCost:
         constraints.append(cp.sum(cp.multiply(x, cost)) <= maxTotalCost)
-        print('Set Max Cost')
+        if debug:
+            print('\tCost <= {0}'.format(maxTotalCost))
     if minTotalCost:
         constraints.append(cp.sum(cp.multiply(x, cost)) >= minTotalCost)
-        print('Set Min Cost')
+        if debug:
+            print('\tCost >= {0}'.format(minTotalCost))
     # rent
     if minTotalRent:
         constraints.append(cp.sum(cp.multiply(x, rent)) >= minTotalRent)
+        if debug:
+            print('\tRent >= {0}'.format(minTotalRent))
     # container age
     if fleetAgeAvgLimit:
-        print('Set Container Average Age Limit')
+        if debug:
+            print('\tAverage Age {0} {1}'.format('>=' if fleetAgeAvgGeq else '<=', fleetAgeAvgLimit))
         if fleetAgeAvgGeq:
             constraints.append(cp.sum(cp.multiply(x, fleetAgeAvg)) >= fleetAgeAvgLimit * cp.sum(x))
         else:
@@ -370,7 +553,8 @@ def BuildModel():
     if fleetAgeBasis:
         for i in range(numLimit):
             if fleetAgeLimit[i]:
-                print('Set Container Age Limit', i)
+                if debug:
+                    print('\tContainer Age {0}-{1} {2} {3}'.format(fleetAgeLowBound[i], fleetAgeUpBound[i], '>=' if fleetAgeGeq[i] else '<=', fleetAgeLimit[i]))
                 if fleetAgeGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, fleetAge[i] * basis[fleetAgeBasis])) >=
                         fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
@@ -379,7 +563,8 @@ def BuildModel():
                         fleetAgeLimit[i] * cp.sum(cp.multiply(x, basis[fleetAgeBasis])))
     # weighted age
     if weightedAgeAvgLimit:
-        print('Set Weighted Average Age Limit')
+        if debug:
+            print('\tAverage Weighted Age {0} {1}'.format('>=' if weightedAgeAvgGeq else '<=', weightedAgeAvgLimit))
         if weightedAgeAvgGeq:
             constraints.append(cp.sum(cp.multiply(x, weightedAgeAvg)) >=
                 weightedAgeAvgLimit * cp.sum(cp.multiply(x, ceu)))
@@ -389,7 +574,8 @@ def BuildModel():
     if weightedAgeBasis:
         for i in range(numLimit):
             if weightedAgeLimit[i]:
-                print('Set Weighted Age Limit', i)
+                if debug:
+                    print('\tWeighted Age {0}-{1} {2} {3}'.format(weightedAgeLowBound[i], weightedAgeUpBound[i], '>=' if weightedAgeGeq[i] else '<=', weightedAgeLimit[i]))
                 if weightedAgeGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, weightedAge[i] * basis[weightedAgeBasis])) >=
                         weightedAgeLimit[i] * cp.sum(cp.multiply(x, basis[weightedAgeBasis])))
@@ -401,8 +587,11 @@ def BuildModel():
         for i in range(numLimit):
             if lesseeLimit[i]:
                 if lesseeType[i] not in lesseeOneHot:
-                    lesseeOneHot[lesseeType[i]] = np.zeros(data.shape[0])
-                print('Set Lessee Limit', i)
+                    print('\tlessee {0} does not exist'.format(lesseeType[i]))
+                    continue
+                    # lesseeOneHot[lesseeType[i]] = np.zeros(data.shape[0])
+                if debug:
+                    print('\tLessee {0} {1} {2}'.format(lesseeType[i], '>=' if lesseeGeq[i] else '<=', lesseeLimit[i]))
                 if lesseeGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) >=
                         lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
@@ -410,42 +599,30 @@ def BuildModel():
                     constraints.append(cp.sum(cp.multiply(x, lesseeOneHot[lesseeType[i]] * basis[lesseeBasis])) <=
                         lesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
         maxTop = 0
-        # top lessee
+        # top lessee -- top lessee does not support >=
         for i in range(3):
             if topLesseeLimit[i]:
                 maxTop = i+1
-                print('Set Top', i+1)
-                if topLesseeGeq[i]:
-                    constraints.append(cp.sum_largest(
-                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) >=
-                            topLesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
-                else:
-                    constraints.append(cp.sum_largest(
-                        cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <=
-                            topLesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
+                if debug:
+                    print('\tTop{0} lessee <= {1}'.format(maxTop, topLesseeLimit[i]))
+                constraints.append(cp.sum_largest(
+                    cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), i+1) <=
+                        topLesseeLimit[i] * cp.sum(cp.multiply(x, basis[lesseeBasis])))
         # others
         if lesseeOthersLimit:
             if lesseeOthers:
-                print('Set Other Lessees via List')
+                if debug:
+                    print('\tOther lessees <= {0}'.format(lesseeOthersLimit))
                 # add constraints according to user input
                 constraints.append(cp.sum_largest(
                     cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOthers]), 1) <=
                         lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis])))
-            else:
-                # find max top limit
-                # TODO: remove this
-                print('Set Other Lessee')
-                print('\t Max Top:', maxTop)
-
-                constraints.append(
-                    cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop + 1)
-                    <= lesseeOthersLimit * cp.sum(cp.multiply(x, basis[lesseeBasis]))) + cp.sum_largest(cp.hstack([cp.sum(cp.multiply(x, lesseeOneHot[l] * basis[lesseeBasis])) for l in lesseeOneHot]), maxTop)
-        
     # status
     if statusBasis:
         for i in range(numLimit):
             if statusType[i]:
-                print('Set Status Limit', i)
+                if debug:
+                    print('\tStatus {0} {1} {2}'.format(statusType[i], '>=' if statusGeq[i] else '<=', statusLimit[i]))
                 if statusGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, hireStatus[statusType[i]] * basis[statusBasis])) >=
                         statusLimit[i] * cp.sum(cp.multiply(x, basis[statusBasis])))
@@ -456,7 +633,8 @@ def BuildModel():
     if productBasis:
         for i in range(numLimit):
             if productLimit[i]:
-                print('Set Product Limit', i)
+                if debug:
+                    print('\tProduct {0} {1} {2}'.format(productType[i], '>=' if productGeq[i] else '<=', productLimit[i]))
                 if productGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, product[i] * basis[productBasis])) >=
                         productLimit[i] * cp.sum(cp.multiply(x, basis[productBasis])))
@@ -467,7 +645,8 @@ def BuildModel():
     if contractBasis:
         for i in range(numLimit):
             if contractLimit[i]:
-                print('Set Contract Type Limit', i)
+                if debug:
+                    print('\tContract {0} {1} {2}'.format(contractType[i], '>=' if contractGeq[i] else '<=', contractLimit[i]))
                 if contractGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, contract[i] * basis[contractBasis])) >=
                         contractLimit[i] * cp.sum(cp.multiply(x, basis[contractBasis])))
@@ -478,7 +657,8 @@ def BuildModel():
     if rmlBasis:
         for i in range(numLimit):
             if rmlLimit[i]:
-                print('Set RML limit', i)
+                if debug:
+                    print('\tRML {0}-inf {1} {2}'.format(rmlLowBound[i], '>=' if rmlGeq[i] else '<=', rmlLimit[i]))
                 if rmlGeq[i]:
                     constraints.append(cp.sum(cp.multiply(x, rml[i] * basis[rmlBasis])) >=
                         rmlLimit[i] * cp.sum(cp.multiply(x, basis[rmlBasis])))
@@ -486,11 +666,25 @@ def BuildModel():
                     constraints.append(cp.sum(cp.multiply(x, rml[i] * basis[rmlBasis])) <=
                         rmlLimit[i] * cp.sum(cp.multiply(x, basis[rmlBasis])))
 
+    # customer country
+    if countryBasis:
+        for i in range(numLimit):
+            if countryLimit[i]:
+                if debug:
+                    print('\tLessee country {0} {1} {2}'.format(countryName[i], '>=' if countryGeq[i] else '<=', countryLimit[i]))
+                if countryGeq[i]:
+                    constraints.append(cp.sum(cp.multiply(x, country[i] * basis[countryBasis])) >= 
+                        countryLimit[i] * cp.sum(cp.multiply(x, basis[countryBasis])))
+                else:
+                    constraints.append(cp.sum(cp.multiply(x, country[i] * basis[countryBasis])) <= 
+                        countryLimit[i] * cp.sum(cp.multiply(x, basis[countryBasis])))
+
     # set number of contract_num & product_type limit
     if numContractProductLimit:
         contractProductType = [c*p for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]
         delta = cp.Variable(shape=len(contractProductType), boolean=True)
-        print('Set number limit on contract-product')
+        if debug:
+            print('\t# of contract-product >= {0}'.format(numContractProductLimit))
         # constraints.append(cp.sum_smallest(
         #     cp.hstack([cp.sum(cp.multiply(x, c*p)) for c in contractNumOneHot for p in productTypeOneHot if sum(c*p) > 0]), 1) >= numContractProductLimit)
         for i in range(len(contractProductType)):
@@ -507,7 +701,7 @@ def SolveModel(prob, timeLimit, threadLimit):
     print("==============================================================")
     print('Model solving...')
     # solve model
-    prob.solve(solver=cp.CBC, verbose=False, maximumSeconds=timeLimit, numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=1, maximumSeconds=timeLimit, numberThreads=threadLimit)
     print("==============================================================")
     print("status:", prob.status)
     print("==============================================================")
@@ -526,7 +720,7 @@ except Exception as e:
 def ValidResult(result):
     reportJson = {}
     passed = True
-    print('======================================================================')
+    print("==============================================================")
     # NBV
     resultNbv = sum(result*nbv)
     print("nbv: {0}".format(round(resultNbv, 4)))
@@ -534,11 +728,11 @@ def ValidResult(result):
     if maxTotalNbv:
         if (resultNbv - maxTotalNbv) > 0.1:
             passed = False
-            print('\t max failed')
+            print('\tmax failed')
     if minTotalNbv:
         if (minTotalNbv - resultNbv) > 0.1: 
             passed = False
-            print('\t min failed')
+            print('\tmin failed')
     # COST
     resultCost = sum(result*cost)
     print("cost: {0}".format(round(resultCost, 4)))
@@ -546,11 +740,11 @@ def ValidResult(result):
     if maxTotalCost:
         if (resultCost - maxTotalCost) > 0.1:
             passed = False
-            print('\t max failed')
+            print('\tmax failed')
     if minTotalCost:
         if (minTotalCost - resultCost) > 0.1:
             passed = False
-            print('\t min failed')
+            print('\tmin failed')
     # RENT
     resultRent = sum(result*rent)
     print("rent: {0}".format(round(resultRent, 4)))
@@ -558,8 +752,11 @@ def ValidResult(result):
     if minTotalRent:
         if (minTotalCost - resultRent) > 0.1:
             passed = False
-            print('\t min failed')
+            print('\tmin failed')
+
     # Fleet Age
+    if objectiveTarget == 'containerAge':
+        print('container average age is {0}'.format(round(sum(result*fleetAgeAvg)/sum(result), 4)))
     if fleetAgeAvgLimit:
         resultFleetAgeAvg = sum(result*fleetAgeAvg)/sum(result)
         print('container average age is {0}'.format(round(resultFleetAgeAvg, 4)))
@@ -567,11 +764,11 @@ def ValidResult(result):
         if fleetAgeAvgGeq:
             if resultFleetAgeAvg < fleetAgeAvgLimit:
                 passed = False
-                print('\t >= failed')
+                print('\t>= failed')
         else:
             if resultFleetAgeAvg > fleetAgeAvgLimit:
                 passed = False
-                print('\t <= failed')
+                print('\t<= failed')
 
     if fleetAgeBasis:
         l = []
@@ -587,11 +784,11 @@ def ValidResult(result):
                 if fleetAgeGeq[i]:
                     if resultFleetAge < fleetAgeLimit[i]:
                         passed = False
-                        print('\t >= failed')
+                        print('\t>= failed')
                 else:
                     if resultFleetAge > fleetAgeLimit[i]:
                         passed = False
-                        print('\t <= failed')
+                        print('\t<= failed')
         reportJson['fleetAge'] = l
     
     # Weighted Age
@@ -601,11 +798,11 @@ def ValidResult(result):
         reportJson['weightedAverageAge'] = resultWeightedAgeAvg
         if weightedAgeAvgGeq:
             if resultWeightedAgeAvg < weightedAgeAvgLimit:
-                print('\t >= failed')
+                print('\t>= failed')
                 passed = False
         else:
             if resultWeightedAgeAvg > weightedAgeAvgLimit:
-                print('\t <= failed')
+                print('\t<= failed')
                 passed = False
 
     if weightedAgeBasis:
@@ -621,11 +818,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if weightedAgeGeq[i]:
                     if resultWeightedAge < weightedAgeLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultWeightedAge > weightedAgeLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         reportJson['weightedAge'] = l
     
@@ -634,6 +831,9 @@ def ValidResult(result):
         l = []
         for i in range(numLimit):
             if lesseeLimit[i]:
+                if lesseeType[i] not in lesseeOneHot:
+                    print('lessee {0} does not exist'.format(lesseeType[i]))
+                    continue
                 resultLessee = sum(result*lesseeOneHot[lesseeType[i]]*basis[lesseeBasis])/sum(result*basis[lesseeBasis])
                 print("lessee {0} is {1}".format(lesseeType[i], round(resultLessee, 4)))
                 tmp = {}
@@ -642,11 +842,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if lesseeGeq[i]:
                     if resultLessee < lesseeLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultLessee > lesseeLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
 
         top4Lessee = heapq.nlargest(4, [(lesseeName, sum(result*lesseeOneHot[lesseeName]*basis[lesseeBasis])) for lesseeName in data['customer'].value_counts().index], key=lambda x:x[1])
@@ -665,11 +865,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if topLesseeGeq[i]:
                     if resultTop3Lessee[i] < topLesseeLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultTop3Lessee[i] > topLesseeLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         # other lessee
         if lesseeOthersLimit:
@@ -677,21 +877,10 @@ def ValidResult(result):
             if lesseeOthers:
                 print('Other lessees via list')
                 maxOtherLessee = max([sum(result*lesseeOneHot[l]*basis[lesseeBasis]) for l in lesseeOthers]) / sum(result*basis[lesseeBasis])
-                print('\t top others is {0}'.format(round(maxOtherLessee, 4)))
+                print('\ttop others is {0}'.format(round(maxOtherLessee, 4)))
                 tmp['percentOthers'] = maxOtherLessee * 100
                 if maxOtherLessee > lesseeOthersLimit:
-                    print('\t \t failed')
-                    passed = False
-            else:
-                print('Other lesees')
-                maxTop = 0
-                for i in range(3):
-                    if topLesseeLimit[i]:
-                        maxTop = i+1
-                print('\t top others is {0}'.format(round(top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]), 4)))
-                tmp['percentOthers'] = round(top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]), 4)
-                if top4Lessee[maxTop][1]/sum(result*basis[lesseeBasis]) > lesseeOthersLimit:
-                    print('\t \t failed')
+                    print('\t\tfailed')
                     passed = False
             l.append(tmp)
         reportJson['lessee'] = l    
@@ -709,11 +898,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if statusGeq[i]:
                     if resultStatus < statusLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultStatus > statusLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         reportJson['status'] = l
     
@@ -730,11 +919,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if productGeq[i]:
                     if resultProduct < productLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultProduct > productLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         reportJson['product'] = l
 
@@ -751,15 +940,36 @@ def ValidResult(result):
                 l.append(tmp)
                 if contractGeq[i]:
                     if resultContract < contractLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultContract > contractLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         reportJson['contract'] = l
+
+    # Lessee Country
+    if countryBasis:
+        l = []
+        for i in range(numLimit):
+            if countryLimit[i]:
+                resultCountry = sum(result*country[i]*basis[countryBasis])/sum(result*basis[countryBasis])
+                print("Lessee Country {0} is {1}".format(countryName[i], round(resultCountry, 4)))
+                tmp = {}
+                tmp['lesseeCountryName'] = countryName[i]
+                tmp['percent'] = resultCountry * 100
+                l.append(tmp)
+                if countryGeq[i]:
+                    if resultCountry < countryLimit[i]:
+                        print('\t>= failed')
+                        passed = False
+                else:
+                    if resultCountry > countryLimit[i]:
+                        print('\t<= failed')
+                        passed = False
+        reportJson['lesseeCountry'] = l
     
-    # RMl
+    # RML
     if rmlBasis:
         l = []
         for i in range(numLimit):
@@ -773,11 +983,11 @@ def ValidResult(result):
                 l.append(tmp)
                 if rmlGeq[i]:
                     if resultRML < rmlLimit[i]:
-                        print('\t >= failed')
+                        print('\t>= failed')
                         passed = False
                 else:
                     if resultRML > rmlLimit[i]:
-                        print('\t <= failed')
+                        print('\t<= failed')
                         passed = False
         reportJson['rml'] = l
         
@@ -807,9 +1017,9 @@ else:
 
         if int(sum(result)) == 0:
             ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID)
-        else:
+        else:   
             passed, outputJson = ValidResult(result)
-            OutputPackage(data, result, queryID)
+            # OutputPackage(data, result, queryID, query_version)
             if passed:
                 ReportStatus('Algorithm Succeeded!', 'O', queryID, outputJson)
             else:
