@@ -94,7 +94,7 @@ def ConnectDatabase(queryID):
         print(e)
         ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
-    return param, data, query_version
+    return param, data, data_query_id, query_version
 
 def OutputPackage(data, result, queryID, query_version):
     """
@@ -118,7 +118,7 @@ def OutputPackage(data, result, queryID, query_version):
         ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
 
-param, data, query_version = ConnectDatabase(queryID)
+param, data, data_query_id, query_version = ConnectDatabase(queryID)
 try:
     print("Executing Pandas SQL...")
     pysqldf = lambda q: sqldf(q, globals())
@@ -973,7 +973,7 @@ else:
             ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints.', 'I', queryID, query_version)
         else:   
             passed, outputJson = ValidResult(result)
-            OutputPackage(data, result, queryID, query_version)
+            OutputPackage(data, result, data_query_id, query_version)
             if passed:
                 ReportStatus('Algorithm Succeeded!', 'O', queryID, query_version, outputJson)
             else:
