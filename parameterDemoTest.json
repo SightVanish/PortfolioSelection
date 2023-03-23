@@ -1,101 +1,84 @@
 {
     "prefer": {
-        "maxOrMin": 1, 
-        "nbvorCost": 1
+        "nbvorCost": 0,
+        "maxOrMin": 0
     },
-    "objective": {
-        "objective": "coc",
-        "_objective": ["containerAge", "weightedAge", "lessee", "onHire", "product","lesseeCountry","totalRent","totalRentDscr","remainingLeaseTenor","factory","coc"],
-        "type": ["D20"],
-        "_type":"lessee name, product name, etc.",
-        "basis": "ceu",
-        "_basis": ["ceu", "teu", "cost", "nbv"],
-        "maxOrMin": 1,
-        "value": ""
-    },
-    "timeLimit": 100, 
-    "totalNBVFrom": 10000, 
-    "totalNBVTo": 0, 
-    "totalCostFrom": 0, 
-    "totalCostTo": 0, 
-    "numContractProductLimit": 0,
+    "timeLimit": 100,
+    "totalNBVFrom": 1000,
+    "totalNBVTo": 1000000000,
+    "totalCostFrom": 1000,
+    "totalCostTo": 100000000,
+    "totalRentFrom": 1000,
+    "numContractProductLimit": 10,
     "containersAge": {
-        "basis": "", 
         "average": {
-            "symbol": 0, 
+            "symbol": 0,
             "averageContainersAge": 0
-        }, 
-        "list": []
-    }, 
-    "weightedAge": {
-        "basis": "", 
-        "average": {
-            "symbol": 0, 
-            "averageWeighedAge": 0
-        }, 
-        "list": []
-    }, 
-    "lessee": {
-        "basis": "", 
-        "others": {
-            "lessee": "", 
-            "symbol": 0, 
-            "percent": 0
-        }, 
-        "list": [
-            {
-                "lessee": "MSC",
-                "symbol": 0,
-                "percent": 90
-            }
-        ], 
-        "allList": [], 
-        "topLessee": {
-            "top1": {
-                "symbol": 0, 
-                "percent": 0
-            }, 
-            "top2": {
-                "symbol": 0, 
-                "percent": 0
-            }, 
-            "top3": {
-                "symbol": 0, 
-                "percent": 0
-            }
-        }
-    }, 
-    "country": {
+        },
         "basis": "",
         "list": [
-            {
-                "country": ["China"],
+        ]
+    },
+    "weightedAge": {
+        "average": {
+            "symbol": 0,
+            "averageWeighedAge": 0
+        },
+        "basis": "",
+        "list": [
+
+        ]
+    },
+    "lessee": {
+        "basis": "ceu",
+        "topLessee": {
+            "top3": {
                 "symbol": 0,
-                "percent": 90
+                "percent": 0
+            },
+            "top1": {
+                "symbol": 0,
+                "percent":0
+            },
+            "top2": {
+                "symbol": 0,
+                "percent": 0
             }
+        },
+        "others": {
+            "lessee": [],
+            "percent": 0
+        },
+        "list": [
         ]
     },
     "status": {
-        "basis": "", 
+        "basis": "",
         "list": [
+
         ]
-    }, 
+    },
     "product": {
-        "basis": "", 
+        "basis": "",
         "list": [
+
         ]
-    }, 
+    },
     "contractType": {
-        "basis": "", 
+        "basis": "",
         "list": [
+
         ]
-    }, 
-    "totalRentFrom": 0, 
-    "rml": {
-        "basis": "", 
-        "list": [
+    },
+    "rml":{
+        "basis": "",
+        "list":[
+
+        ]
+    },
+    "country":{
+        "basis": "",
+        "list":[
         ]
     }
 }
-
-

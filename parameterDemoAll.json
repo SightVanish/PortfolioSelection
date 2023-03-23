@@ -3,11 +3,11 @@
         "nbvorCost": 0,
         "maxOrMin": 0
     },
-    "timeLimit": 300,
+    "timeLimit": 100,
     "totalNBVFrom": 0,
-    "totalNBVTo": 0,
+    "totalNBVTo": 10000000,
     "totalCostFrom": 0,
-    "totalCostTo": 0,
+    "totalCostTo": 100000000,
     "totalRentFrom": 0,
     "numContractProductLimit": 1,
     "containersAge": {
@@ -19,7 +19,7 @@
         "list": [
             {
                 "containersAgeFrom": 0,
-                "containersAgeTo": 3,
+                "containersAgeTo": 100,
                 "symbol": 1,
                 "percent": 1
             }
@@ -35,7 +35,7 @@
         "list": [
             {
                 "weightedAgeFrom": 0,
-                "weightedAgeTo": 7,
+                "weightedAgeTo": 100,
                 "symbol": 1,
                 "percent": 1
             }
@@ -46,20 +46,20 @@
         "topLessee": {
             "top3": {
                 "symbol": 0,
-                "percent": 90
+                "percent": 100
             },
             "top1": {
                 "symbol": 0,
-                "percent": 90
+                "percent":100
             },
             "top2": {
                 "symbol": 0,
-                "percent": 90
+                "percent": 100
             }
         },
         "others": {
             "lessee": [],
-            "percent": 20
+            "percent": 0
         },
         "list": [
         ]
@@ -75,12 +75,12 @@
             {
                 "statusType":"OF",
                 "symbol": 0,
-                "percent": 90
+                "percent": 100
             },
             {
                 "statusType":"None",
                 "symbol": 0,
-                "percent": 90
+                "percent": 100
             }
         ]
     },
@@ -110,14 +110,20 @@
         ]
     },
     "rml":{
-        "basis": "",
+        "basis": "ceu",
         "list":[
             {
                 "rmlFrom": 1,
                 "rmlTo": "",
                 "symbol": 1,
-                "percent": 50
+                "percent": 1
             }
+        ]
+    },
+    "country":{
+        "basis": "",
+        "list":[
+            
         ]
     }
 }
