@@ -366,8 +366,8 @@ def BuildModel(EnableWeightedAge=False, lookupTable=None):
             contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot if sum(c.toarray().ravel()*p.toarray().ravel())>0]
             delta = cp.Variable(shape=len(contractProductType), boolean=True)
             for i in range(len(contractProductType)):
-                constraints.append(x @ contractProductType[0] >= param['numContractProductLimit'] * delta[i])
-                constraints.append(x @ contractProductType[0] <= 99999999 * delta[i])
+                constraints.append(x @ contractProductType[i] >= param['numContractProductLimit'] * delta[i])
+                constraints.append(x @ contractProductType[i] <= 99999999 * delta[i])
 
     prob = cp.Problem(objective, constraints)
     print('Time Cost:', time.time() - start_time)
@@ -375,6 +375,7 @@ def BuildModel(EnableWeightedAge=False, lookupTable=None):
     return y if EnableWeightedAge else x, prob
 
 def Validation(x, EnableWeightedAge=False, lookupTable=None):
+    epsilon = 0.001
     passed = True
     print("==============================================================")
     if EnableWeightedAge:
@@ -388,25 +389,25 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
     print('Objective: {0} = {1}'.format('nbv' if param['prefer']['nbvorCost'] else 'cost', objective))
     # NBV
     if param['totalNBVFrom']:
-        p = x @ data['nbv'] >= param['totalNBVFrom']
+        p = x @ data['nbv'] >= param['totalNBVFrom'] - epsilon
         if not p: print('NBV Lower Bound Failed')
         passed = passed and p
     if param['totalNBVTo']:
-        p = x @ data['nbv'] <= param['totalNBVTo']
+        p = x @ data['nbv'] <= param['totalNBVTo'] + epsilon
         if not p: print('NBV Upper Bound Failed')
         passed = passed and p
     # Cost
     if param['totalCostFrom']:
-        p = x @ data['cost'] >= param['totalCostFrom']
+        p = x @ data['cost'] >= param['totalCostFrom'] - epsilon
         if not p: print('Cost Lower Bound Failed')
         passed = passed and p
     if param['totalCostTo']:
-        p = x @ data['cost'] <= param['totalCostTo']
+        p = x @ data['cost'] <= param['totalCostTo'] + epsilon
         if not p: print('Cost Upper Bound Failed')
         passed = passed and p
     # Rent
     if param['totalRentFrom']:
-        p = x @ data['rml'] >= param['totalRentFrom']
+        p = x @ data['rml'] >= param['totalRentFrom'] - epsilon
         if not p: print('Rent Lower Bound Failed')
         passed = passed and p
     # Average Fleet Age
@@ -414,7 +415,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['containersAge']['average']['symbol'] else -1) * (
             x @ data['fleet_year']
             - param['containersAge']['average']['averageContainersAge'] * cp.sum(x)
-            ) >= 0
+            ) >= - epsilon
         if not p: print('Average Fleet Age Failed')
         passed = passed and p
     # Fleet Age
@@ -422,7 +423,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['containersAge']['list'][i]['symbol'] else -1) * (
             x @ (containerAgeOneHot[i].toarray().ravel() * data[param['containersAge']['basis']])
             - param['containersAge']['list'][i]['percent'] / 100 * (x @ data[param['containersAge']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Fleet Age Limit {i} Failed')
         passed = passed and p
     # Average Weighted Age
@@ -430,7 +431,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['weightedAge']['average']['symbol'] else -1) * (
             x @ data['weighted_age']
             - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
-            ) >= 0
+            ) >= - epsilon
         if not p: print('Average Weighted Age Failed')
         passed = passed and p
     # Weighted Age
@@ -439,7 +440,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
             p = (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
                 x @ weightedAgeOneHot[i].toarray().ravel()
                 - param['weightedAge']['list'][i]['percent'] / 100 * (x @ data['ceu'])
-                ) >= 0
+                ) >= - epsilon
             if not p: print(f'Weighted Age Limit {i} Failed')
             passed = passed and p
     # RML
@@ -447,7 +448,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['rml']['list'][i]['symbol'] else -1) * (
             x @ (rmlOneHot[i].toarray().ravel() * data[param['rml']['basis']])
             - param['rml']['list'][i]['percent'] / 100 * (x @ data[param['rml']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'RML Limit {i} Failed')
         passed = passed and p
     # Status
@@ -456,7 +457,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['status']['list'][i]['symbol'] else -1) * (
             x @ (statusOneHot[status].toarray().ravel() * data[param['status']['basis']])
             - param['status']['list'][i]['percent'] / 100 * (x @ data[param['status']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Status {i} Limit Failed')
         passed = passed and p
     # Product Type
@@ -465,7 +466,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['product']['list'][i]['symbol'] else -1) * (
             cp.sum(productOneHot[productListIndex].toarray() @ (x * data[param['product']['basis']]))
             - param['product']['list'][i]['percent'] / 100 * (x @ data[param['product']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Product Type {i} Limit Failed')
         passed = passed and p
     # Contract Type
@@ -474,7 +475,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['contractType']['list'][i]['symbol'] else -1) * (
             cp.sum(contractTypeOneHot[contractTypeListIndex].toarray() @ (x * data[param['contractType']['basis']]))
             - param['contractType']['list'][i]['percent'] / 100 * (x @ data[param['contractType']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Contract Type {i} Limit Failed')
         passed = passed and p
     # Country
@@ -482,7 +483,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['country']['list'][i]['symbol'] else -1) * (
             x @ (countryOneHot[i].toarray().ravel() * data[param['country']['basis']])
             - param['country']['list'][i]['percent'] / 100 * (x @ data[param['country']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Country {i} Limit Failed')
         passed = passed and p
     # Certain Lessee
@@ -493,7 +494,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         p = (1 if param['lessee']['list'][i]['symbol'] else -1) * (
             x @ (lesseeOneHot[lesseeIndex[param['lessee']['list'][i]['lessee']]].toarray().ravel() * data[param['lessee']['basis']])
             - param['lessee']['list'][i]['percent'] / 100 * (x @ data[param['lessee']['basis']])
-            ) >= 0
+            ) >= - epsilon
         if not p: print(f'Lessee {i} Limit Failed')
         passed = passed and p
     # Top Lessee
@@ -501,7 +502,7 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         if param['lessee']['topLessee'][f'top{i+1}']['percent']:
             p = sum(heapq.nlargest(i + 1, lesseeOneHot.toarray() @ (x * data[param['lessee']['basis']]))) \
                 - param['lessee']['topLessee'][f'top{i+1}']['percent'] / 100 * (x @ data[param['lessee']['basis']]) \
-                <= 0
+                <= epsilon
             if not p: print(f'Top {i+1} Lessee Failed')
             passed = passed and p
     # Other Lessee -- only handle certain lessees
@@ -509,14 +510,14 @@ def Validation(x, EnableWeightedAge=False, lookupTable=None):
         otherLesseeIndex = [lesseeIndex.get(l) for l in param['lessee']['others']['lessee'] if lesseeIndex.get(l) is not None]
         p = max(lesseeOneHot[otherLesseeIndex].toarray() @ (x * data[param['lessee']['basis']])) \
             - param['lessee']['others']['percent'] / 100 * (x @ data[param['lessee']['basis']]) \
-            <= 0
+            <= epsilon
         if not p: print('Other Lessees Failed')
         passed = passed and p
     # Num Limit
     if not EnableWeightedAge:
         if param['numContractProductLimit']:
-            contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot if sum(c.toarray().ravel()*p.toarray().ravel())>0]
-            p = min([c @ x for c in contractProductType]) >= param['numContractProductLimit']
+            contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot]
+            p = min([c @ x for c in contractProductType if c @ x > 0]) >= param['numContractProductLimit'] - 1
             if not p: print('Num Limit Failed')
             passed = passed and p
     return passed
@@ -622,7 +623,7 @@ if prob.status == 'infeasible':
     exit(0)
 
 x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
-passed = Validation(x)
+passed = Validation(x, EnableWeightedAge=True, lookupTable=lookupTable)
 if not passed:
     OutputPackage(data, x@lookupTable, queryID)
     ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
