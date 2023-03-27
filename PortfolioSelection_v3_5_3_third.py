@@ -119,6 +119,7 @@ def OutputPackage(data, result, queryID, query_version):
         exit(1)
 
 param, data, data_query_id, query_version = ConnectDatabase(queryID)
+
 try:
     print("Executing Pandas SQL...")
     pysqldf = lambda q: sqldf(q, globals())
