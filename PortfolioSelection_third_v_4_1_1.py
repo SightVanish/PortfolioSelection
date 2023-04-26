@@ -34,16 +34,18 @@ if queryID is None:
     print("No valid query id!")
     exit(1)
 
-def ReportStatus(msg, flag, queryID, output=None):
+def ReportStatus(msg, flag, queryID, query_version, output=None):
     """
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version=2 where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID)
+    sql = "update fll_t_dw.biz_fir_query_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version={5} where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID, query_version)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
     conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
     conn.autocommit = True
     cur = conn.cursor()
+    cur.execute(sql)
+    sql = "update fll_t_dw.biz_fir_third_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version={5} where id='{4}'".format(msg, flag, datetime.datetime.now(), output, queryID, query_version)
     cur.execute(sql)
     conn.commit()
     conn.close()
@@ -54,7 +56,7 @@ def ConnectDatabase(queryID):
     """
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+        sqlParameter = "select query_id, query_based_version, query_version, python_json from fll_t_dw.biz_fir_third_parameter_definition where id='{0}'".format(queryID)
         conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
@@ -62,7 +64,10 @@ def ConnectDatabase(queryID):
         elif paramInput.shape[0] > 1:
             raise Exception("More than One Valid Query Requests are Found!")
         param = json.loads(paramInput['python_json'][0])
-        print(param)
+        data_query_id = paramInput['query_id'][0]
+        query_based_verion = paramInput['query_based_version'][0]
+        query_version = paramInput['query_version'][0]
+        print("base version: {0}\ncurrent version: {1}\nobjective: {2}".format(query_based_verion, query_version, param["objective"]))
     except Exception as e:
         print("Loading Parameters from GreenPlum Failed!\n", e)
         exit(1)
@@ -70,34 +75,28 @@ def ConnectDatabase(queryID):
         print('Data loading...')
         sqlInput = \
         """
-        select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
-        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
-        from fll_t_dw.biz_ads_fir_pkg_data p1
-        inner join 
-        (select contract_num, product
-        from(
-        select contract_num, product, count(*) num
+        select billing_status_fz as billing, unit_id_fz as unit_id, product, fleet_year_fz as fleet_year, contract_cust_id as customer, contract_num,
+        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent, rml_x_ceu_c as rml, cust_country, per_diem_rate_current as pdr
         from fll_t_dw.biz_ads_fir_pkg_data
-        WHERE query_id='{1}'
-        group by 1, 2
-        ) p1 
-        where num >= {0}) p2
-        on p1.contract_num=p2.contract_num and p1.product=p2.product
-        WHERE query_id='{1}'
-        """.format(param["numContractProductLimit"], queryID)
-        data = pd.read_sql(sqlInput, conn)
+        where query_id = '{1}'
+        and unit_id_fz in
+        (select unit_id
+        from fll_t_dw.biz_fir_asset_package
+        where query_version = {0}
+        and query_id = '{1}')
+        """.format(query_based_verion, data_query_id)
+        data = pd.read_sql(sqlInput, conn)    
         if data.shape[0] == 0:
-            raise Exception("No Data Available!")
-        print('Input data shape:', data.shape)
+            raise Exception("No Data Available in GreenPlum!")
+        print('Raw data shape:', data.shape)
         conn.close()
     except Exception as e:
         print(e)
-        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID)
+        ReportStatus("Loading Data from GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
+    return param, data, data_query_id, query_version
 
-    return param, data
-
-def OutputPackage(data, result, queryID):
+def OutputPackage(data, result, queryID, query_version):
     """
     Output final package to biz_model.biz_fir_asset_package.
     """
@@ -110,13 +109,13 @@ def OutputPackage(data, result, queryID):
         values_list = []
         for i in range(len(result)):
             if result[i]:
-                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0, 2))
+                values_list.append((data['unit_id'][i], queryID, uuid.uuid1().hex, 0, 0, int(query_version)))
         psycopg2.extras.execute_values(cur, sqlOutput, values_list)
         conn.commit()
         conn.close()
     except Exception as e:
         print(e) 
-        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID)
+        ReportStatus("Writing data to GreenPlum Failed!", 'F', queryID, query_version)
         exit(1)
 
 def DataProcessing(data):
@@ -200,17 +199,63 @@ def BuildModel(EnableWeightedAge=False, lookupTable=None):
     print('Building Model...')
     start_time = time.time()
     x = cp.Variable(shape=data.shape[0], boolean=True)
-    x.value = np.ones(shape=data.shape[0])
+    x.value = np.ones(data.shape[0])
     if EnableWeightedAge:
         y = cp.Variable(shape=lookupTable.shape[0], boolean=True)
         x = y @ lookupTable
 
-    # objective
-    objective = (x @ data['nbv']) if param['prefer']['nbvorCost'] else (x @ data['cost'])
-    objective = cp.Maximize(objective) if param['prefer']['maxOrMin'] else cp.Minimize(objective)
-
     # constraints
     constraints = [cp.sum(x) >= 1]
+
+    # objective
+    if param['objective']['objective'] == 'containerAge':
+        obj = (x @ data['fleet_year']) / (cp.sum(x))
+    elif param['objective']['objective'] == 'weightedAge':
+        obj = (x @ data['weighted_age']) / (x @ data['ceu'])
+    elif param['objective']['objective'] == 'lessee':
+        lesseeValue = lesseeOneHot[lesseeIndex[param['objective']['type'][0]]].toarray().ravel() * data[param['objective']['basis']]
+        obj = (x @ lesseeValue) / (x @ data[param['objective']['basis']])
+        if param['objective']['value']:
+            constraints.append(x @ lesseeValue <= param['objective']['value'] / 100 * x @ data[param['objective']['basis']])
+    elif param['objective']['objective'] == 'onHire':
+        obj = (x @ (statusOneHot[0].toarray().ravel() * data[param['objective']['basis']])) / (x @ data[param['objective']['basis']])
+        if param['objective']['value']:
+            constraints.append(x @ (statusOneHot[0].toarray().ravel() * data[param['objective']['basis']]) \
+                               <= param['objective']['value'] / 100 * x @ data[param['objective']['basis']])
+    elif param['objective']['objective'] == 'product':
+        productListIndex = [productIndex.get(p) for p in param['objective']['type'] if productIndex.get(p) is not None]
+        obj = cp.sum(productOneHot[productListIndex].toarray() @ cp.multiply(x, data[param['objective']['basis']])) / (x @ data[param['objective']['basis']])
+        if param['objective']['value']:
+            constraints.append(cp.sum(productOneHot[productListIndex].toarray() @ cp.multiply(x, data[param['objective']['basis']])) \
+                               <= param['objective']['value'] / 100 * x @ data[param['objective']['basis']])
+    elif param['objective']['objective'] == 'lesseeCountry':
+        row, col = [], []
+        for i in range(data.shape[0]):
+            if data['cust_country'][i] in param['objective']['type']:
+                row.append(j)
+                col.append(i)
+        countryOneHot = csr_matrix(([1 for _ in range(len(row))], (row, col)), shape=(1, data.shape[0]))
+        obj = (x @ (countryOneHot[0].toarray().ravel() * data[param['objective']['basis']])) / (x @ data[param['objective']['basis']])
+    elif param['objective']['objective'] == 'totalRentDscr':
+        obj = x @ data['rent']
+    elif param['objective']['objective'] == 'remainingLeaseTenor':
+        obj = (x @ data['rml']) / (x @ data['ceu'])
+        if param['objective']['value']:
+            constraints.append(x @ data['rml'] <= param['objective']['value'] * x @ data['ceu'])
+    elif param['objective']['objective'] == 'factory':
+        obj = (x @ (statusOneHot[2].toarray().ravel() * data[param['objective']['basis']])) / (x @ data[param['objective']['basis']])
+    elif param['objective']['objective'] == 'coc':
+        obj = (x @ (data['pdr'] * data[param['objective']['basis']])) / (x @ data[param['objective']['basis']])
+    else:
+        print('Objective is not expected: {0}. Set dummy objective.'.format(param['objective']['objective']))
+        obj = 1
+    
+    if param['objective']['value']:
+        objective = cp.Maximize(obj)
+    else:
+        objective = cp.Maximize(obj) if param['objective']['maxOrMin'] else cp.Minimize(obj)
+
+
     # NBV
     if param['totalNBVFrom']:
         print('Set NBV Lower Bound')
@@ -228,7 +273,7 @@ def BuildModel(EnableWeightedAge=False, lookupTable=None):
     # Rent
     if param['totalRentFrom']:
         print('Set Rent Lower Bound')
-        constraints.append(x @ data['rml'] >= param['totalRentFrom'])
+        constraints.append(x @ data['rent'] >= param['totalRentFrom'])
     # Average Fleet Age
     if param['containersAge']['average']['averageContainersAge']:
         print('Set Average Container Age Limit')
@@ -379,7 +424,7 @@ def Validation(x, EnableWeightedAge=False):
         passed = passed and p
     # Rent
     if param['totalRentFrom']:
-        p = x @ data['rml'] >= param['totalRentFrom'] - epsilon
+        p = x @ data['rent'] >= param['totalRentFrom'] - epsilon
         if not p: print('Rent Lower Bound Failed')
         passed = passed and p
     # Average Fleet Age
@@ -494,7 +539,7 @@ def Validation(x, EnableWeightedAge=False):
             passed = passed and p
     return passed
 
-param, data = ConnectDatabase(queryID)
+param, data, data_query_id, query_version = ConnectDatabase(queryID)
 
 try:
     model_time = time.time()
@@ -508,30 +553,30 @@ try:
     x, prob = BuildModel()
     print("==============================================================")
     print('Model solving...')
-    prob.solve(solver=cp.CBC, verbose=debug, maximumSeconds=max(param['timeLimit'], 100), numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=debug, warm_start=True, qcp=1)
     print("Status:", prob.status)
     print('Time Cost', time.time() - model_time)
 except Exception as e:
     print(e)
-    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID)
+    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID, query_version)
     exit(1)
 
 if prob.status == 'infeasible':
-    ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID)
+    ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID, query_version)
     exit(0)
 
 x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
 passed = Validation(x)
 if not passed:
-    OutputPackage(data, x, queryID)
-    ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
+    OutputPackage(data, x, data_query_id, query_version)
+    ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID, query_version)
     exit(0)
 
 # Passed
 if not param['weightedAge']['list']:
     # if no limit on weighted age
-    OutputPackage(data, x, queryID)
-    ReportStatus('Algorithm Succeeded!', 'O', queryID)
+    OutputPackage(data, x, data_query_id, query_version)
+    ReportStatus('Algorithm Succeeded!', 'O', queryID, query_version)
     exit(0)
 
 print("==============================================================")
@@ -582,26 +627,27 @@ try:
     x, prob = BuildModel(EnableWeightedAge=True, lookupTable=lookupTable)
     print("==============================================================")
     print('Model solving...')
-    prob.solve(solver=cp.CBC, verbose=debug, maximumSeconds=max(param['timeLimit'], 100), numberThreads=threadLimit)
+    prob.solve(solver=cp.CBC, verbose=debug, warm_start=True, qcp=1)
     print("Status:", prob.status)
     print('Time Cost', time.time() - model_time)
 
 except Exception as e:
     print(e)
-    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID)
+    ReportStatus('Model Failed! Please Contact Developing Team!', 'F', queryID, query_version)
     exit(1)
 
 if prob.status == 'infeasible':
-    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
-    OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
+    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID, query_version)
+    OutputPackage(data, [1 for _ in range(data.shape[0])], data_query_id, query_version) # outpu all
     exit(0)
+
 x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
 passed = Validation(x, EnableWeightedAge=True)
 if not passed:
-    OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
-    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
+    OutputPackage(data, [1 for _ in range(data.shape[0])], data_query_id, query_version) # output all 
+    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID, query_version)
     exit(0)
 else:
-    OutputPackage(data, x, queryID)
-    ReportStatus('Algorithm Succeeded!', 'O', queryID)
+    OutputPackage(data, x, data_query_id, query_version)
+    ReportStatus('Algorithm Succeeded!', 'O', queryID, query_version)
     exit(0)
