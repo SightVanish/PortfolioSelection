@@ -519,9 +519,14 @@ except Exception as e:
 if prob.status == 'infeasible':
     ReportStatus('Problem Proven Infeasible! Please Modify Constaints.', 'I', queryID)
     exit(0)
+try:
+    x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
+    passed = Validation(x)
+except Exception as e:
+    print(e)
+    ReportStatus('Validation Failed! Please Contact Developing Team!', 'F', queryID)
+    exit(1)
 
-x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
-passed = Validation(x)
 if not passed:
     OutputPackage(data, x, queryID)
     ReportStatus('Constraints Cannot Be fulfilled! Please Modify Constaints Or Increase Running Timelimit.', 'N', queryID)
@@ -595,8 +600,15 @@ if prob.status == 'infeasible':
     ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
     OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
     exit(0)
-x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
-passed = Validation(x, EnableWeightedAge=True)
+
+try:
+    x = np.where(abs(x.value-1) < 1e-3, 1, 0) # x == 1
+    passed = Validation(x, EnableWeightedAge=True)
+except Exception as e:
+    print(e)
+    ReportStatus('Validation Failed! Please Contact Developing Team!', 'F', queryID)
+    exit(1)
+
 if not passed:
     OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
     ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
