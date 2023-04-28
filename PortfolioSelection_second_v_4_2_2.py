@@ -386,7 +386,7 @@ def Validation(x, EnableWeightedAge=False):
     if param['containersAge']['average']['averageContainersAge']:
         p = (1 if param['containersAge']['average']['symbol'] else -1) * (
             x @ data['fleet_year']
-            - param['containersAge']['average']['averageContainersAge'] * cp.sum(x)
+            - param['containersAge']['average']['averageContainersAge'] * sum(x)
             ) >= - epsilon
         if not p: print('Average Fleet Age Failed')
         passed = passed and p
@@ -436,7 +436,7 @@ def Validation(x, EnableWeightedAge=False):
     for i in range(len(param['product']['list'])):
         productListIndex = [productIndex.get(p) for p in param['product']['list'][i]['productType'] if productIndex.get(p) is not None]
         p = (1 if param['product']['list'][i]['symbol'] else -1) * (
-            cp.sum(productOneHot[productListIndex].toarray() @ (x * data[param['product']['basis']]))
+            sum(productOneHot[productListIndex].toarray() @ (x * data[param['product']['basis']]))
             - param['product']['list'][i]['percent'] / 100 * (x @ data[param['product']['basis']])
             ) >= - epsilon
         if not p: print(f'Product Type {i} Limit Failed')
@@ -445,7 +445,7 @@ def Validation(x, EnableWeightedAge=False):
     for i in range(len(param['contractType']['list'])):
         contractTypeListIndex = [contractTypeIndex.get(c) for c in param['contractType']['list'][i]['contractType'] if contractTypeIndex.get(c) is not None]
         p = (1 if param['contractType']['list'][i]['symbol'] else -1) * (
-            cp.sum(contractTypeOneHot[contractTypeListIndex].toarray() @ (x * data[param['contractType']['basis']]))
+            sum(contractTypeOneHot[contractTypeListIndex].toarray() @ (x * data[param['contractType']['basis']]))
             - param['contractType']['list'][i]['percent'] / 100 * (x @ data[param['contractType']['basis']])
             ) >= - epsilon
         if not p: print(f'Contract Type {i} Limit Failed')
