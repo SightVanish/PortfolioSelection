@@ -540,6 +540,7 @@ def Validation(x, EnableWeightedAge=False):
     return passed
 
 param, data, data_query_id, query_version = ConnectDatabase(queryID)
+data = data.fillna('None')
 
 try:
     model_time = time.time()
