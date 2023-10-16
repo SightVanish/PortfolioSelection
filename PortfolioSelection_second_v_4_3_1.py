@@ -38,10 +38,10 @@ def ReportStatus(msg, flag, queryID, output=None):
     """
     Print message and update status in biz_model.biz_fir_query_parameter_definition.
     """
-    sql = "update fll_t_dw.biz_fir_third_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version= version + 1 where query_id='{4}' and query_version = 2".format(msg, flag, datetime.datetime.now(), output, queryID)
+    sql = "update biz_model.biz_fir_third_parameter_definition set python_info_data='{0}', success_flag='{1}', update_time='{2}', python_result_json='{3}', version= version + 1 where query_id='{4}' and query_version = 2".format(msg, flag, datetime.datetime.now(), output, queryID)
     print("============================================================================================================================")
     print("Reporting issue:", msg)
-    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+    conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(sql)
@@ -54,8 +54,8 @@ def ConnectDatabase(queryID):
     """
     try:
         print('Parameters reading...')
-        sqlParameter = "select python_json from fll_t_dw.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        sqlParameter = "select python_json from biz_model.biz_fir_query_parameter_definition where id='{0}'".format(queryID)
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         paramInput = pd.read_sql(sqlParameter, conn)
         if paramInput.shape[0] == 0:
             raise Exception("No Valid Query Request is Found!")
@@ -72,12 +72,12 @@ def ConnectDatabase(queryID):
         """
         select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
         contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
-        from fll_t_dw.biz_ads_fir_pkg_data p1
+        from biz_model.biz_ads_fir_pkg_data p1
         inner join 
         (select contract_num, product
         from(
         select contract_num, product, count(*) num
-        from fll_t_dw.biz_ads_fir_pkg_data
+        from biz_model.biz_ads_fir_pkg_data
         WHERE query_id='{1}'
         group by 1, 2
         ) p1 
@@ -101,9 +101,9 @@ def OutputPackage(data, result, queryID):
     """
     Output final package to biz_model.biz_fir_asset_package.
     """
-    sqlOutput = "insert into fll_t_dw.biz_fir_asset_package (unit_id, query_id, id, is_void, version, query_version) values %s"
+    sqlOutput = "insert into biz_model.biz_fir_asset_package (unit_id, query_id, id, is_void, version, query_version) values %s"
     try:
-        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "iflorensgp", user = "fluser", password = "13$vHU7e")
+        conn = psycopg2.connect(host = "10.18.35.245", port = "5432", dbname = "biz_model_prod", user = "bizmodeluser", password = "$2kBBx@@!!")
         conn.autocommit = True
         cur = conn.cursor()
         print('Writing data...')
