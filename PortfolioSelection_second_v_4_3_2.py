@@ -246,20 +246,21 @@ def BuildModel(EnableWeightedAge=False, lookupTable=None):
             - param['containersAge']['list'][i]['percent'] / 100 * (x @ data[param['containersAge']['basis']])
             ) >= 0)
     # Average Weighted Age
-    if param['weightedAge']['average']['averageWeighedAge']:
-        print('Set Average Weighted Age Limit')
-        constraints.append(
-            (1 if param['weightedAge']['average']['symbol'] else -1) * (
-            x @ data['weighted_age']
-            - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
-            ) >= 0)
+    if EnableWeightedAge:
+        if param['weightedAge']['average']['averageWeighedAge']:
+            print('Set Average Weighted Age Limit')
+            constraints.append(
+                (1 if param['weightedAge']['average']['symbol'] else -1) * (
+                x @ (data['weighted_age'] * data['ceu'])
+                - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
+                ) >= 0)
     # Weighted Age
     if EnableWeightedAge:
         for i in range(len(param['weightedAge']['list'])):
             print(f'Set Weighted Age {i} Limit')
             constraints.append(
                 (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
-                x @ weightedAgeOneHot[i].toarray().ravel()
+                x @ (weightedAgeOneHot[i].toarray().ravel() * data['ceu'])
                 - param['weightedAge']['list'][i]['percent'] / 100 * (x @ data['ceu'])
                 ) >= 0)
     # RML
@@ -399,21 +400,25 @@ def Validation(x, EnableWeightedAge=False):
         if not p: print(f'Fleet Age Limit {i} Failed')
         passed = passed and p
     # Average Weighted Age
-    if param['weightedAge']['average']['averageWeighedAge']:
-        p = (1 if param['weightedAge']['average']['symbol'] else -1) * (
-            x @ data['weighted_age']
-            - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
-            ) >= - epsilon
-        if not p: print('Average Weighted Age Failed')
-        passed = passed and p
+    if EnableWeightedAge:
+        if param['weightedAge']['average']['averageWeighedAge']:
+            p = (1 if param['weightedAge']['average']['symbol'] else -1) * (
+                x @ (data['weighted_age'] * data['ceu'])
+                - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
+                ) >= - epsilon
+            if not p: print('Average Weighted Age Failed')
+            passed = passed and p
     # Weighted Age
     if EnableWeightedAge:
         for i in range(len(param['weightedAge']['list'])):
             p = (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
-                x @ weightedAgeOneHot[i].toarray().ravel()
+                x @ (weightedAgeOneHot[i].toarray().ravel() * data['ceu'])
                 - param['weightedAge']['list'][i]['percent'] / 100 * (x @ data['ceu'])
                 ) >= - epsilon
             if not p: print(f'Weighted Age Limit {i} Failed')
+            if debug:
+                print("selected containers, all containers, percentage 100%")
+                print(x @ (weightedAgeOneHot[i].toarray().ravel() * data['ceu']), (x @ data['ceu']), param['weightedAge']['list'][i]['percent'])
             passed = passed and p
     # RML
     for i in range(len(param['rml']['list'])):
@@ -495,7 +500,7 @@ def Validation(x, EnableWeightedAge=False):
     return passed
 
 param, data = ConnectDatabase(queryID)
-data = data.fillna('None')
+data = data.fillna("None")
 
 try:
     model_time = time.time()
