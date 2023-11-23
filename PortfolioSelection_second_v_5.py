@@ -70,8 +70,21 @@ def ConnectDatabase(queryID):
         print('Data loading...')
         sqlInput = \
         """
-        select billing_status_fz as billing, unit_id_fz as unit_id, p1.product, fleet_year_fz as fleet_year, contract_cust_id as customer, p1.contract_num,
-        contract_lease_type as contract, cost, nbv, age_x_ceu as weighted_age, ceu_fz as ceu, teu_fz as teu, rent as rent, rml_x_ceu_c as rml, cust_country
+        select billing_status_fz as billing
+        , unit_id_fz as unit_id
+        , p1.product
+        , fleet_year_fz as fleet_year
+        , contract_cust_id as customer
+        , p1.contract_num
+        ,contract_lease_type as contract
+        , cost
+        , nbv
+        , age_x_ceu as weighted_age
+        , ceu_fz as ceu
+        , teu_fz as teu
+        , rent as rent
+        , rml_x_ceu_c as rml
+        , cust_country
         from biz_model.biz_ads_fir_pkg_data p1
         inner join 
         (select contract_num, product
@@ -160,15 +173,6 @@ def DataProcessing(data):
                 col.append(i)
     containerAgeOneHot = csr_matrix(([1 for _ in range(len(row))], (row, col)), shape=(len(param['containersAge']['list']), numData))
 
-    # Weighted Age
-    row, col = [], []
-    for i in range(numData):
-        for j in range(len(param['weightedAge']['list'])):
-            if param['weightedAge']['list'][j]['weightedAgeFrom'] <= data['weighted_age'][i] <= param['weightedAge']['list'][j]['weightedAgeTo']:
-                row.append(j)
-                col.append(i)
-    weightedAgeOneHot = csr_matrix(([1 for _ in range(len(row))], (row, col)), shape=(len(param['weightedAge']['list']), numData))
-
     # RML
     row, col = [], []
     for i in range(numData):
@@ -193,17 +197,14 @@ def DataProcessing(data):
         contractIndex, contractOneHot, \
         contractTypeIndex, contractTypeOneHot, \
         productIndex, productOneHot, \
-        containerAgeOneHot, weightedAgeOneHot, rmlOneHot, countryOneHot
+        containerAgeOneHot, rmlOneHot, countryOneHot
 
-def BuildModel(EnableWeightedAge=True, lookupTable=None):
+def BuildModel(EnableWeightedAge=False):
     print("==============================================================")
     print('Building Model...')
     start_time = time.time()
     x = cp.Variable(shape=data.shape[0], boolean=True)
     x.value = np.ones(shape=data.shape[0])
-    # if EnableWeightedAge:
-    #     y = cp.Variable(shape=lookupTable.shape[0], boolean=True)
-    #     x = y @ lookupTable
 
     # objective
     objective = (x @ data['nbv']) if param['prefer']['nbvorCost'] else (x @ data['cost'])
@@ -250,7 +251,7 @@ def BuildModel(EnableWeightedAge=True, lookupTable=None):
         print('Set Average Weighted Age Limit')
         constraints.append(
             (1 if param['weightedAge']['average']['symbol'] else -1) * (
-            x @ data['weighted_age']
+            x @ (data['weighted_age'])
             - param['weightedAge']['average']['averageWeighedAge'] * (x @ data['ceu'])
             ) >= 0)
     # Weighted Age
@@ -259,7 +260,7 @@ def BuildModel(EnableWeightedAge=True, lookupTable=None):
             print(f'Set Weighted Age {i} Limit')
             constraints.append(
                 (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
-                x @ weightedAgeOneHot[i].toarray().ravel()
+                x @ (weightedAgeOneHot[i].toarray().ravel() * data['ceu'])
                 - param['weightedAge']['list'][i]['percent'] / 100 * (x @ data['ceu'])
                 ) >= 0)
     # RML
@@ -334,20 +335,21 @@ def BuildModel(EnableWeightedAge=True, lookupTable=None):
             <= 0)
 
     # Num Limit
-    if param['numContractProductLimit']:
-        print('Set Num Limit')
-        contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot if sum(c.toarray().ravel()*p.toarray().ravel())>0]
-        delta = cp.Variable(shape=len(contractProductType), boolean=True)
-        for i in range(len(contractProductType)):
-            constraints.append(x @ contractProductType[i] >= param['numContractProductLimit'] * delta[i])
-            constraints.append(x @ contractProductType[i] <= 99999999 * delta[i])
+    if not EnableWeightedAge:
+        if param['numContractProductLimit']:
+            print('Set Num Limit')
+            contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot if sum(c.toarray().ravel()*p.toarray().ravel())>0]
+            delta = cp.Variable(shape=len(contractProductType), boolean=True)
+            for i in range(len(contractProductType)):
+                constraints.append(x @ contractProductType[i] >= param['numContractProductLimit'] * delta[i])
+                constraints.append(x @ contractProductType[i] <= 99999999 * delta[i])
 
     prob = cp.Problem(objective, constraints)
     print('Time Cost:', time.time() - start_time)
     
     return x, prob
 
-def Validation(x, EnableWeightedAge=True):
+def Validation(x, EnableWeightedAge=False):
     epsilon = 0.001
     passed = True
     print("==============================================================")
@@ -407,12 +409,25 @@ def Validation(x, EnableWeightedAge=True):
         passed = passed and p
     # Weighted Age
     if EnableWeightedAge:
+        # Recalculate WA
+        selected_date = data.iloc[list(np.nonzero(x)[0])].reset_index()
+        def calculate_wa(group):
+            group['new_weighted_age'] = group['weighted_age'].sum() / group['ceu'].sum()
+            return group
+        selected_date = selected_date.groupby(['product', 'contract']).apply(calculate_wa)
+
         for i in range(len(param['weightedAge']['list'])):
             p = (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
-                x @ weightedAgeOneHot[i].toarray().ravel()
-                - param['weightedAge']['list'][i]['percent'] / 100 * (x @ data['ceu'])
+                selected_date[selected_date['new_weighted_age'].
+                              between(param['weightedAge']['list'][i]['weightedAgeFrom'], param['weightedAge']['list'][i]['weightedAgeTo'])]['ceu'].sum()
+                - param['weightedAge']['list'][i]['percent'] / 100 * selected_date['ceu'].sum()
                 ) >= - epsilon
+
             if not p: print(f'Weighted Age Limit {i} Failed')
+            if debug:
+                print("selected containers, all containers, percentage %")
+                print(selected_date[selected_date['new_weighted_age'].
+                              between(param['weightedAge']['list'][i]['weightedAgeFrom'], param['weightedAge']['list'][i]['weightedAgeTo'])]['ceu'].sum(), selected_date['ceu'].sum(), param['weightedAge']['list'][i]['percent'])
             passed = passed and p
     # RML
     for i in range(len(param['rml']['list'])):
@@ -485,15 +500,16 @@ def Validation(x, EnableWeightedAge=True):
         if not p: print('Other Lessees Failed')
         passed = passed and p
     # Num Limit
-    if param['numContractProductLimit']:
-        contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot]
-        p = min([c @ x for c in contractProductType if c @ x > 0]) >= param['numContractProductLimit'] - 1
-        if not p: print('Num Limit Failed')
-        passed = passed and p
+    if not EnableWeightedAge:
+        if param['numContractProductLimit']:
+            contractProductType = [c.toarray().ravel()*p.toarray().ravel() for c in contractOneHot for p in productOneHot]
+            p = min([c @ x for c in contractProductType if c @ x > 0]) >= param['numContractProductLimit'] - 1
+            if not p: print('Num Limit Failed')
+            passed = passed and p
     return passed
 
 param, data = ConnectDatabase(queryID)
-data = data.fillna('None')
+data = data.fillna("None")
 
 try:
     model_time = time.time()
@@ -502,7 +518,7 @@ try:
     contractIndex, contractOneHot, \
     contractTypeIndex, contractTypeOneHot, \
     productIndex, productOneHot, \
-    containerAgeOneHot, weightedAgeOneHot, rmlOneHot, countryOneHot \
+    containerAgeOneHot, rmlOneHot, countryOneHot \
     = DataProcessing(data)
     x, prob = BuildModel()
     print("==============================================================")
@@ -544,36 +560,7 @@ print('Handling Weighted Age Limit Now...')
 try:
     # data processing
     data = data.iloc[list(np.nonzero(x)[0])].reset_index()
-
-    print("Executing Pandas SQL...")
-    pysqldf = lambda q: sqldf(q, globals())
-    q = \
-    """
-    select billing, unit_id, p1.product, fleet_year, customer, p1.contract_num,
-    contract, cost, nbv, weighted_age, ceu, teu, rent, rml, cust_country
-    from data p1
-    inner join 
-    (select contract_num, product
-    from (select contract_num, product, count(*) num from data group by 1, 2) p1 
-    where num >= {0}) p2
-    on p1.contract_num=p2.contract_num and p1.product=p2.product
-    """.format(param["numContractProductLimit"])
-    data = pysqldf(q)
     print('Input data shape:', data.shape)
-
-    # compute lookup table
-    contract_product = {}
-    j = 0
-    for i in range(data.shape[0]):
-        if (data['contract_num'][i], data['product'][i]) not in contract_product:
-            contract_product[(data['contract_num'][i], data['product'][i])] = j
-            j += 1
-    row, col = [], []
-    for i in range(data.shape[0]):
-        row.append(contract_product[(data['contract_num'][i], data['product'][i])])
-        col.append(i)
-    value = [1 for _ in range(data.shape[0])]
-    lookupTable = csr_matrix((value, (row, col)), shape=(len(contract_product), data.shape[0]))
 
     model_time = time.time()
     statusOneHot, \
@@ -581,9 +568,22 @@ try:
     contractIndex, contractOneHot, \
     contractTypeIndex, contractTypeOneHot, \
     productIndex, productOneHot, \
-    containerAgeOneHot, weightedAgeOneHot, rmlOneHot, countryOneHot \
+    containerAgeOneHot, rmlOneHot, countryOneHot \
     = DataProcessing(data)
-    x, prob = BuildModel(EnableWeightedAge=True, lookupTable=lookupTable)
+    # Weighted Age
+    def calculate_wa(group):
+        group['new_weighted_age'] = group['weighted_age'].sum() / group['ceu'].sum()
+        return group
+    data = data.groupby(['product', 'contract']).apply(calculate_wa)
+    row, col = [], []
+    for i in range(data.shape[0]):
+        for j in range(len(param['weightedAge']['list'])):
+            if param['weightedAge']['list'][j]['weightedAgeFrom'] <= data['new_weighted_age'][i] <= param['weightedAge']['list'][j]['weightedAgeTo']:
+                row.append(j)
+                col.append(i)
+    weightedAgeOneHot = csr_matrix(([1 for _ in range(len(row))], (row, col)), shape=(len(param['weightedAge']['list']), data.shape[0]))
+
+    x, prob = BuildModel(EnableWeightedAge=True)
     print("==============================================================")
     print('Model solving...')
     prob.solve(solver=cp.CBC, verbose=debug, maximumSeconds=max(param['timeLimit'], 100), numberThreads=threadLimit)
