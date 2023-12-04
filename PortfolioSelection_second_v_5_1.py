@@ -414,7 +414,7 @@ def Validation(x, EnableWeightedAge=False):
         def calculate_wa(group):
             group['new_weighted_age'] = group['weighted_age'].sum() / group['ceu'].sum()
             return group
-        selected_date = selected_date.groupby(['product', 'contract']).apply(calculate_wa)
+        selected_date = selected_date.groupby(['product', 'contract_num']).apply(calculate_wa)
 
         for i in range(len(param['weightedAge']['list'])):
             p = (1 if param['weightedAge']['list'][i]['symbol'] else -1) * (
@@ -574,7 +574,7 @@ try:
     def calculate_wa(group):
         group['new_weighted_age'] = group['weighted_age'].sum() / group['ceu'].sum()
         return group
-    data = data.groupby(['product', 'contract']).apply(calculate_wa)
+    data = data.groupby(['product', 'contract_num']).apply(calculate_wa)
     row, col = [], []
     for i in range(data.shape[0]):
         for j in range(len(param['weightedAge']['list'])):
@@ -596,7 +596,7 @@ except Exception as e:
     exit(1)
 
 if prob.status == 'infeasible':
-    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
+    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'W', queryID)
     OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
     exit(0)
 
@@ -610,7 +610,7 @@ except Exception as e:
 
 if not passed:
     OutputPackage(data, [1 for _ in range(data.shape[0])], queryID) # output all
-    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'WF', queryID)
+    ReportStatus('Constraints on Weighted Age Cannot Be fulfilled! Please Modify Constaints.', 'W', queryID)
     exit(0)
 else:
     OutputPackage(data, x, queryID)
