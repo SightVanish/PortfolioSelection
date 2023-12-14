@@ -177,7 +177,7 @@ def DataProcessing(data):
     row, col = [], []
     for i in range(numData):
         for j in range(len(param['rml']['list'])):
-            if param['rml']['list'][j]['rmlFrom'] <= data['rml'][i] <= INF:
+            if param['rml']['list'][j]['rmlFrom'] <= data['rml'][i] <= param['rml']['list'][j]['rmlTo']:
                 row.append(j)
                 col.append(i)
     rmlOneHot = csr_matrix(([1 for _ in range(len(row))], (row, col)), shape=(len(param['rml']['list']), numData))
