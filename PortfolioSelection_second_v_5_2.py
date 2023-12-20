@@ -83,7 +83,7 @@ def ConnectDatabase(queryID):
         , ceu_fz as ceu
         , teu_fz as teu
         , rent as rent
-        , rml_x_ceu_c as rml
+        , remaining_lease_term_c as rml
         , cust_country
         from biz_model.biz_ads_fir_pkg_data p1
         inner join 
